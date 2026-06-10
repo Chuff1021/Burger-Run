@@ -27,7 +27,7 @@
 - [x] Build score, distance, speed scaling, restart.
 - [x] Add basic logic tests.
 - [x] Run app, fix TypeScript and console errors.
-- [ ] Commit Phase 2.
+- [x] Commit Phase 2.
 
 ## Phase 3: Burger Factory Visual Theme
 
@@ -37,8 +37,8 @@
 - [x] Replace graybox obstacles with themed hazards.
 - [x] Add polished stylized burger character placeholders.
 - [x] Add lightweight particles and trails.
-- [ ] Verify mobile performance and readability.
-- [ ] Commit Phase 3.
+- [x] Verify mobile performance and readability.
+- [x] Commit Phase 3.
 
 ## Phase 4: Premium UI
 
@@ -50,8 +50,8 @@
 - [x] Build upgrade/shop placeholder.
 - [x] Build settings page.
 - [x] Add animated transitions and button states.
-- [ ] Verify responsive layout.
-- [ ] Commit Phase 4.
+- [x] Verify responsive layout.
+- [x] Commit Phase 4.
 
 ## Phase 5: Powerups, Progression, Save State
 
@@ -64,7 +64,7 @@
 - [x] Implement selected character persistence.
 - [x] Implement settings persistence.
 - [x] Add character stat placeholders.
-- [ ] Commit Phase 5.
+- [x] Commit Phase 5.
 
 ## Phase 6: Mobile Polish And PWA
 
@@ -74,7 +74,7 @@
 - [x] Add Capacitor readiness notes.
 - [x] Add manual QA checklist.
 - [ ] Profile draw calls and object counts.
-- [ ] Verify desktop and mobile browser flows.
+- [x] Verify desktop and mobile browser flows.
 - [ ] Commit Phase 6.
 
 ## Backlog

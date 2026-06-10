@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { ACTIVE_TRACK_SEGMENTS, CHARACTER_ROSTER, TRACK_SEGMENT_LENGTH } from '../../game/constants';
 import { useRunnerStore } from '../../game/runnerStore';
 import { Collectibles } from './Collectibles';
+import { Effects } from './Effects';
 import { FactoryEnvironment } from './FactoryEnvironment';
 import { FactoryTrack } from './FactoryTrack';
 import { Obstacles } from './Obstacles';
@@ -71,6 +72,7 @@ export function BurgerRunnerScene() {
       <Obstacles />
       <Collectibles />
       <Powerups />
+      <Effects />
       <Float speed={2.2} rotationIntensity={0.05} floatIntensity={0.18}>
         <PlayerBurger character={character} />
       </Float>

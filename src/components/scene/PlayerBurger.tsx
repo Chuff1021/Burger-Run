@@ -15,7 +15,8 @@ export function PlayerBurger({ character }: { character: CharacterDefinition }) 
   useFrame((_, dt) => {
     if (!group.current) return;
     group.current.rotation.z = Math.sin(performance.now() * 0.009) * 0.035;
-    group.current.rotation.x += (isSliding ? -0.38 : 0 - group.current.rotation.x) * dt * 10;
+    const targetRotationX = isSliding ? -0.38 : 0;
+    group.current.rotation.x += (targetRotationX - group.current.rotation.x) * dt * 10;
   });
 
   const isRobot = character.id === 'robot';
