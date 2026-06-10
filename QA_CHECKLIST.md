@@ -13,6 +13,7 @@ Use this checklist after each gameplay phase and before release builds.
 
 ## Mobile Controls
 
+- [ ] Pointer-event swipes work on modern mobile browsers.
 - [ ] Swipe left changes one lane left.
 - [ ] Swipe right changes one lane right.
 - [ ] Swipe up jumps.

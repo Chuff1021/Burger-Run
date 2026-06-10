@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isCoinCollected, isObstacleHit } from '../game/collision';
+import { resolveSwipeGesture } from '../game/input';
 import { laneX } from '../game/math';
 import type { CoinEntity, ObstacleEntity, PowerupTimers } from '../game/types';
 
@@ -56,5 +57,13 @@ describe('runner logic', () => {
 
     expect(isCoinCollected(coin, 1, noPowerups)).toBe(false);
     expect(isCoinCollected(coin, 1, { ...noPowerups, magnet: 4 })).toBe(true);
+  });
+
+  it('resolves swipe directions with a threshold', () => {
+    expect(resolveSwipeGesture({ x: 100, y: 100 }, { x: 40, y: 105 })).toBe('left');
+    expect(resolveSwipeGesture({ x: 100, y: 100 }, { x: 170, y: 102 })).toBe('right');
+    expect(resolveSwipeGesture({ x: 100, y: 100 }, { x: 95, y: 30 })).toBe('up');
+    expect(resolveSwipeGesture({ x: 100, y: 100 }, { x: 106, y: 170 })).toBe('down');
+    expect(resolveSwipeGesture({ x: 100, y: 100 }, { x: 112, y: 108 })).toBeNull();
   });
 });

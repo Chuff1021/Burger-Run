@@ -1,10 +1,20 @@
 import { useEffect, useRef } from 'react';
+import { resolveSwipeGesture } from '../game/input';
 import { useRunnerStore } from '../game/runnerStore';
 
 export function useRunnerInput() {
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const pointerStart = useRef<{ x: number; y: number; id: number } | null>(null);
 
   useEffect(() => {
+    const applySwipe = (direction: ReturnType<typeof resolveSwipeGesture>) => {
+      if (!direction) return;
+      const store = useRunnerStore.getState();
+      if (direction === 'left') store.moveLane(-1);
+      if (direction === 'right') store.moveLane(1);
+      if (direction === 'up') store.jump();
+      if (direction === 'down') store.slide();
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
       const store = useRunnerStore.getState();
       const key = event.key.toLowerCase();
@@ -19,38 +29,33 @@ export function useRunnerInput() {
       }
     };
 
-    const onTouchStart = (event: TouchEvent) => {
-      const touch = event.changedTouches[0];
-      if (!touch) return;
-      touchStart.current = { x: touch.clientX, y: touch.clientY };
+    const onPointerDown = (event: PointerEvent) => {
+      if (!event.isPrimary) return;
+      pointerStart.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
     };
 
-    const onTouchEnd = (event: TouchEvent) => {
-      const start = touchStart.current;
-      const touch = event.changedTouches[0];
-      if (!start || !touch) return;
+    const onPointerUp = (event: PointerEvent) => {
+      const start = pointerStart.current;
+      if (!start || start.id !== event.pointerId) return;
+      pointerStart.current = null;
 
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-      const threshold = 32;
-      const store = useRunnerStore.getState();
+      applySwipe(resolveSwipeGesture(start, { x: event.clientX, y: event.clientY }));
+    };
 
-      if (Math.max(absX, absY) < threshold) return;
-      if (absX > absY) store.moveLane(dx > 0 ? 1 : -1);
-      else if (dy < 0) store.jump();
-      else store.slide();
+    const onPointerCancel = () => {
+      pointerStart.current = null;
     };
 
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', onPointerCancel, { passive: true });
 
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
     };
   }, []);
 }

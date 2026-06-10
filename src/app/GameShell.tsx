@@ -15,9 +15,10 @@ export default function GameShell() {
   useRunnerInput();
   const status = useRunnerStore((state) => state.status);
   const activePanel = useRunnerStore((state) => state.activePanel);
+  const laneTarget = useRunnerStore((state) => state.laneTarget);
 
   return (
-    <main className="game-root">
+    <main className="game-root" data-game-status={status} data-lane-target={laneTarget}>
       <Canvas
         shadows={false}
         dpr={[1, 1.7]}
