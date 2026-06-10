@@ -15,64 +15,64 @@
 
 ## Phase 2: Playable Graybox Runner
 
-- [ ] Scaffold React, TypeScript, Vite, TailwindCSS, Three.js, React Three Fiber, Drei, Zustand, Framer Motion, Vitest.
-- [ ] Build normalized keyboard and swipe input.
-- [ ] Build player lane movement.
-- [ ] Build jump and slide state.
-- [ ] Build cinematic rear-follow camera.
-- [ ] Build procedural endless track chunks.
-- [ ] Build object pools for obstacles, coins, and powerups.
-- [ ] Build obstacle and coin spawning.
-- [ ] Build collision detection.
-- [ ] Build score, distance, speed scaling, restart.
-- [ ] Add basic logic tests.
-- [ ] Run app, fix TypeScript and console errors.
+- [x] Scaffold React, TypeScript, Vite, TailwindCSS, Three.js, React Three Fiber, Drei, Zustand, Framer Motion, Vitest.
+- [x] Build normalized keyboard and swipe input.
+- [x] Build player lane movement.
+- [x] Build jump and slide state.
+- [x] Build cinematic rear-follow camera.
+- [x] Build procedural endless track chunks.
+- [x] Build object pools for obstacles, coins, and powerups.
+- [x] Build obstacle and coin spawning.
+- [x] Build collision detection.
+- [x] Build score, distance, speed scaling, restart.
+- [x] Add basic logic tests.
+- [x] Run app, fix TypeScript and console errors.
 - [ ] Commit Phase 2.
 
 ## Phase 3: Burger Factory Visual Theme
 
-- [ ] Add neon conveyor belt floor.
-- [ ] Add glowing lane rails and factory portal frames.
-- [ ] Add background grill bays, fry stations, sauce pipes, robotic arms, and signs.
-- [ ] Replace graybox obstacles with themed hazards.
-- [ ] Add polished stylized burger character placeholders.
-- [ ] Add lightweight particles and trails.
+- [x] Add neon conveyor belt floor.
+- [x] Add glowing lane rails and factory portal frames.
+- [x] Add background grill bays, fry stations, sauce pipes, robotic arms, and signs.
+- [x] Replace graybox obstacles with themed hazards.
+- [x] Add polished stylized burger character placeholders.
+- [x] Add lightweight particles and trails.
 - [ ] Verify mobile performance and readability.
 - [ ] Commit Phase 3.
 
 ## Phase 4: Premium UI
 
-- [ ] Build start screen.
-- [ ] Build gameplay HUD.
-- [ ] Build pause menu.
-- [ ] Build game over rewards panel.
-- [ ] Build character select placeholder.
-- [ ] Build upgrade/shop placeholder.
-- [ ] Build settings page.
-- [ ] Add animated transitions and button states.
+- [x] Build start screen.
+- [x] Build gameplay HUD.
+- [x] Build pause menu.
+- [x] Build game over rewards panel.
+- [x] Build character select placeholder.
+- [x] Build upgrade/shop placeholder.
+- [x] Build settings page.
+- [x] Add animated transitions and button states.
 - [ ] Verify responsive layout.
 - [ ] Commit Phase 4.
 
 ## Phase 5: Powerups, Progression, Save State
 
-- [ ] Implement Magnet.
-- [ ] Implement Shield.
-- [ ] Implement Speed Boost.
-- [ ] Implement Double Coins.
-- [ ] Implement Ketchup Rush.
-- [ ] Implement persistent wallet and best score.
-- [ ] Implement selected character persistence.
-- [ ] Implement settings persistence.
-- [ ] Add character stat placeholders.
+- [x] Implement Magnet.
+- [x] Implement Shield.
+- [x] Implement Speed Boost.
+- [x] Implement Double Coins.
+- [x] Implement Ketchup Rush.
+- [x] Implement persistent wallet and best score.
+- [x] Implement selected character persistence.
+- [x] Implement settings persistence.
+- [x] Add character stat placeholders.
 - [ ] Commit Phase 5.
 
 ## Phase 6: Mobile Polish And PWA
 
-- [ ] Tune swipe thresholds and input buffering.
-- [ ] Add PWA manifest and install support.
-- [ ] Add service worker registration.
-- [ ] Add Capacitor readiness notes.
-- [ ] Add manual QA checklist.
+- [x] Tune swipe thresholds and input buffering.
+- [x] Add PWA manifest and install support.
+- [x] Add service worker registration.
+- [x] Add Capacitor readiness notes.
+- [x] Add manual QA checklist.
 - [ ] Profile draw calls and object counts.
 - [ ] Verify desktop and mobile browser flows.
 - [ ] Commit Phase 6.

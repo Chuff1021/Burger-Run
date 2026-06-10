@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Burger Run icon">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#25384a" />
+      <stop offset="55%" stop-color="#10141c" />
+      <stop offset="100%" stop-color="#07090d" />
+    </radialGradient>
+    <linearGradient id="bun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffe58a" />
+      <stop offset="48%" stop-color="#ffb53f" />
+      <stop offset="100%" stop-color="#c45c17" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)" />
+  <path d="M82 335h348" stroke="#24d6ff" stroke-width="18" stroke-linecap="round" opacity=".7" filter="url(#glow)" />
+  <path d="M118 225c10-74 72-124 139-124 74 0 134 52 142 124H118Z" fill="url(#bun)" stroke="#ffd84d" stroke-width="8" />
+  <path d="M126 244h268c23 0 42 18 42 40s-19 40-42 40H126c-23 0-42-18-42-40s19-40 42-40Z" fill="#2d160f" stroke="#ff6a1a" stroke-width="8" />
+  <path d="M118 258c38 22 70-20 108 2 35 20 63-19 99-1 24 12 45 9 71-4" fill="none" stroke="#67ff72" stroke-width="18" stroke-linecap="round" />
+  <path d="M118 300h286c-14 52-68 91-145 91s-127-39-141-91Z" fill="#ffbf3f" stroke="#ffd84d" stroke-width="8" />
+  <path d="M150 144h28M217 125h28M285 130h28M344 160h28" stroke="#fff2b8" stroke-width="12" stroke-linecap="round" />
+  <path d="M99 388h314" stroke="#ff2f2f" stroke-width="14" stroke-linecap="round" filter="url(#glow)" />
+  <text x="256" y="452" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="58" fill="#fff7de" stroke="#ff2f2f" stroke-width="4">RUN</text>
+</svg>
