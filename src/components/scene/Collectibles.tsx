@@ -1,23 +1,83 @@
-import { laneX } from '../../game/math';
-import { useRunnerStore } from '../../game/runnerStore';
+import { useFrame } from '@react-three/fiber';
+import { useMemo, useRef } from 'react';
+import * as THREE from 'three';
+import { COIN_POOL_SIZE } from '../../game/constants';
+import { sim } from '../../game/engine';
 
+const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
+
+/**
+ * Burger coins as instanced meshes — three draw calls total (face, rim,
+ * burger emboss) no matter how many coins are live. Matrices update
+ * imperatively from the sim each frame.
+ */
 export function Collectibles() {
-  const coins = useRunnerStore((state) => state.coins);
+  const faceRef = useRef<THREE.InstancedMesh>(null);
+  const rimRef = useRef<THREE.InstancedMesh>(null);
+  const embossRef = useRef<THREE.InstancedMesh>(null);
+
+  const { dummy, euler, quat, scl, pos } = useMemo(
+    () => ({
+      dummy: new THREE.Matrix4(),
+      euler: new THREE.Euler(0, 0, 0, 'YXZ'),
+      quat: new THREE.Quaternion(),
+      scl: new THREE.Vector3(1, 1, 1),
+      pos: new THREE.Vector3()
+    }),
+    []
+  );
+
+  useFrame(() => {
+    const face = faceRef.current;
+    const rim = rimRef.current;
+    const emboss = embossRef.current;
+    if (!face || !rim || !emboss) return;
+
+    for (let i = 0; i < COIN_POOL_SIZE; i += 1) {
+      const coin = sim.coins[i];
+      if (!coin.active) {
+        face.setMatrixAt(i, HIDDEN);
+        rim.setMatrixAt(i, HIDDEN);
+        emboss.setMatrixAt(i, HIDDEN);
+        continue;
+      }
+      const pop = coin.pull > 0 ? 1.18 : 1;
+      scl.setScalar(pop);
+      pos.set(coin.x, coin.y, coin.z);
+      // cylinders: axis is +Y, so tip face toward camera (RX 90°) then spin
+      euler.set(Math.PI / 2, coin.spin, 0);
+      quat.setFromEuler(euler);
+      dummy.compose(pos, quat, scl);
+      face.setMatrixAt(i, dummy);
+      emboss.setMatrixAt(i, dummy);
+      // torus: ring already faces ±Z, only needs the spin
+      euler.set(0, coin.spin, 0);
+      quat.setFromEuler(euler);
+      dummy.compose(pos, quat, scl);
+      rim.setMatrixAt(i, dummy);
+    }
+    face.instanceMatrix.needsUpdate = true;
+    rim.instanceMatrix.needsUpdate = true;
+    emboss.instanceMatrix.needsUpdate = true;
+  });
 
   return (
     <group>
-      {coins.filter((coin) => coin.active).map((coin) => (
-        <group key={coin.id} position={[laneX(coin.lane), coin.y, coin.z]} rotation={[Math.PI / 2, 0, coin.z * 0.8]}>
-          <mesh>
-            <cylinderGeometry args={[0.34, 0.34, 0.09, 28]} />
-            <meshStandardMaterial color="#ffbf3f" metalness={0.75} roughness={0.18} emissive="#ffd84d" emissiveIntensity={0.8} />
-          </mesh>
-          <mesh position={[0, 0, 0.055]}>
-            <torusGeometry args={[0.19, 0.018, 8, 20]} />
-            <meshStandardMaterial color="#fff2a8" emissive="#ffd84d" emissiveIntensity={1.2} />
-          </mesh>
-        </group>
-      ))}
+      {/* gold face */}
+      <instancedMesh ref={faceRef} args={[undefined, undefined, COIN_POOL_SIZE]} frustumCulled={false}>
+        <cylinderGeometry args={[0.42, 0.42, 0.12, 22]} />
+        <meshStandardMaterial color="#ffcf52" metalness={0.6} roughness={0.25} emissive="#ffae1f" emissiveIntensity={1.5} />
+      </instancedMesh>
+      {/* bright rim */}
+      <instancedMesh ref={rimRef} args={[undefined, undefined, COIN_POOL_SIZE]} frustumCulled={false}>
+        <torusGeometry args={[0.42, 0.032, 8, 24]} />
+        <meshStandardMaterial color="#fff0b8" metalness={0.85} roughness={0.15} emissive="#ffd84d" emissiveIntensity={2} />
+      </instancedMesh>
+      {/* burger emboss: squashed darker disc floating on both faces */}
+      <instancedMesh ref={embossRef} args={[undefined, undefined, COIN_POOL_SIZE]} frustumCulled={false}>
+        <cylinderGeometry args={[0.25, 0.25, 0.16, 16]} />
+        <meshStandardMaterial color="#d9831f" metalness={0.6} roughness={0.3} emissive="#c45e08" emissiveIntensity={1.1} />
+      </instancedMesh>
     </group>
   );
 }

@@ -15,15 +15,14 @@ export default function GameShell() {
   useRunnerInput();
   const status = useRunnerStore((state) => state.status);
   const activePanel = useRunnerStore((state) => state.activePanel);
-  const laneTarget = useRunnerStore((state) => state.laneTarget);
 
   return (
-    <main className="game-root" data-game-status={status} data-lane-target={laneTarget}>
+    <main className="game-root" data-game-status={status}>
       <Canvas
         shadows={false}
-        dpr={[1, 1.7]}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
-        camera={{ position: [0, 4.3, -8.4], fov: 62, near: 0.1, far: 210 }}
+        dpr={[1, 1.5]}
+        gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
+        camera={{ position: [0, 3.6, -6.6], fov: 62, near: 0.1, far: 150 }}
       >
         <Suspense fallback={null}>
           <BurgerRunnerScene />

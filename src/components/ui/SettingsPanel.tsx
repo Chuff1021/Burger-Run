@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Volume2, Smartphone, Sparkles, X } from 'lucide-react';
+import { Music, Smartphone, Sparkles, Volume2, X } from 'lucide-react';
 import { useRunnerStore } from '../../game/runnerStore';
 import type { VisualQuality } from '../../game/types';
 
@@ -18,8 +18,13 @@ export function SettingsPanel() {
         <h2>Run Feel</h2>
         <label className="toggle-row">
           <Volume2 size={20} />
-          <span>Audio</span>
+          <span>Sound FX</span>
           <input type="checkbox" checked={settings.audio} onChange={(event) => updateSettings({ audio: event.target.checked })} />
+        </label>
+        <label className="toggle-row">
+          <Music size={20} />
+          <span>Music</span>
+          <input type="checkbox" checked={settings.music} onChange={(event) => updateSettings({ music: event.target.checked })} />
         </label>
         <label className="toggle-row">
           <Smartphone size={20} />

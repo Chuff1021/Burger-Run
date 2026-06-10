@@ -5,6 +5,7 @@ const SAVE_KEY = 'burger-run-save-v1';
 
 export const defaultSettings: SettingsState = {
   audio: true,
+  music: true,
   haptics: true,
   reducedEffects: false,
   quality: 'high'
@@ -14,6 +15,7 @@ export const defaultSave: SaveState = {
   wallet: 0,
   bestScore: 0,
   bestDistance: 0,
+  totalRuns: 0,
   selectedCharacter: CHARACTER_ROSTER[0].id,
   settings: defaultSettings
 };
