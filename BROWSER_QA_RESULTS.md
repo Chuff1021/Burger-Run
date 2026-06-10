@@ -43,3 +43,18 @@ The in-app browser evaluator did not expose `requestAnimationFrame` or `performa
 - Draw calls.
 - Memory after repeated restarts.
 - JavaScript allocation during spawning and collision.
+
+## Vercel Production QA
+
+Date: 2026-06-10
+
+URL: `https://burger-run.vercel.app/`
+
+- Production page loaded successfully.
+- Mobile viewport `390 x 844` rendered the canvas and HUD.
+- No Vite error overlay.
+- No console warnings or errors.
+- Run button started gameplay.
+- Pointer-event swipe left changed `data-lane-target` from `1` to `0`.
+- Pointer-event swipe right changed `data-lane-target` from `0` back to `1`.
+- Unit tests cover left, right, up, down, and below-threshold swipe resolution.
