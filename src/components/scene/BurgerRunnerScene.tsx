@@ -1,4 +1,4 @@
-import { Environment, Lightformer } from '@react-three/drei';
+import { Environment } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@react-three/postprocessing';
 import { useEffect, useMemo } from 'react';
@@ -104,20 +104,13 @@ function PostFX() {
   );
 }
 
-/** Static studio-style env map: gives metals and gloss something to reflect. */
+/**
+ * Real HDRI environment (Poly Haven "metro noord", CC0): a night metro
+ * corridor with warm/cool artificial lights — photographic reflections for
+ * every metal, clearcoat, and glossy surface in the kitchen.
+ */
 function KitchenEnvironment() {
-  return (
-    <Environment resolution={64} frames={1}>
-      {/* warm grill glow, left wall */}
-      <Lightformer intensity={2.2} color="#ff7a2a" position={[9, 5, 8]} rotation-y={-Math.PI / 2} scale={[22, 3, 1]} />
-      {/* cyan strip, right wall */}
-      <Lightformer intensity={2.2} color="#24d6ff" position={[-9, 6, 12]} rotation-y={Math.PI / 2} scale={[22, 3, 1]} />
-      {/* golden ceiling panel ahead */}
-      <Lightformer intensity={1.6} color="#ffd84d" position={[0, 10, 28]} rotation-x={Math.PI / 2} scale={[12, 8, 1]} />
-      {/* dim cool fill behind */}
-      <Lightformer intensity={0.7} color="#22304a" position={[0, 8, -12]} scale={[24, 12, 1]} />
-    </Environment>
-  );
+  return <Environment files="/hdri/metro_noord_1k.hdr" environmentIntensity={0.85} />;
 }
 
 export function BurgerRunnerScene() {

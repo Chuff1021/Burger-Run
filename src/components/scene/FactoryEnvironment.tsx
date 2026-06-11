@@ -1,9 +1,39 @@
-import { Text } from '@react-three/drei';
+import { Clone, Text, useGLTF, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { sim } from '../../game/engine';
-import { brushedMetalTexture, glowStreakTexture, neonSignTexture } from './textures';
+import { glowStreakTexture, neonSignTexture } from './textures';
+
+const MODELS = {
+  burger: '/models/burger-cheese.glb',
+  burgerDouble: '/models/burger-cheese-double.glb',
+  fries: '/models/fries.glb',
+  ketchup: '/models/bottle-ketchup.glb',
+  mustard: '/models/bottle-musterd.glb',
+  soda: '/models/soda.glb',
+  hotdog: '/models/hot-dog.glb',
+  donut: '/models/donut-sprinkles.glb',
+  pizza: '/models/pizza.glb'
+} as const;
+
+for (const url of Object.values(MODELS)) useGLTF.preload(url);
+
+/** One Kenney food-kit model instance (CC0). */
+function Prop({
+  url,
+  position,
+  rotationY = 0,
+  scale = 1
+}: {
+  url: string;
+  position: [number, number, number];
+  rotationY?: number;
+  scale?: number;
+}) {
+  const { scene } = useGLTF(url);
+  return <Clone object={scene} position={position} rotation={[0, rotationY, 0]} scale={scale} />;
+}
 
 const MODULE_LENGTH = 34;
 const MODULE_COUNT = 5;
@@ -47,12 +77,66 @@ interface SharedMats {
 }
 
 function useSharedMats(): SharedMats {
+  // Poly Haven metal_plate (CC0) — treadplate diffuse / normal / roughness / metalness
+  const [plateDiff, plateNor, plateRough, plateMetal] = useTexture([
+    '/textures/metal/metal_plate_diff_1k.jpg',
+    '/textures/metal/metal_plate_nor_gl_1k.jpg',
+    '/textures/metal/metal_plate_rough_1k.jpg',
+    '/textures/metal/metal_plate_metal_1k.jpg'
+  ]);
+
+  /* eslint-disable react-hooks/immutability -- one-time texture configuration */
+  useMemo(() => {
+    for (const tex of [plateDiff, plateNor, plateRough, plateMetal]) {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(2.5, 1);
+      tex.anisotropy = 8;
+    }
+    plateDiff.colorSpace = THREE.SRGBColorSpace;
+  }, [plateDiff, plateNor, plateRough, plateMetal]);
+  /* eslint-enable react-hooks/immutability */
+
   return useMemo(
     () => ({
-      counter: new THREE.MeshStandardMaterial({ color: '#473828', metalness: 0.55, roughness: 0.4, emissive: '#1f1208', emissiveIntensity: 0.5 }),
-      counterTrim: new THREE.MeshStandardMaterial({ map: brushedMetalTexture(), color: '#c9a86a', metalness: 0.85, roughness: 0.3 }),
-      steel: new THREE.MeshStandardMaterial({ map: brushedMetalTexture(), color: '#aebbd2', metalness: 0.92, roughness: 0.26 }),
-      darkSteel: new THREE.MeshStandardMaterial({ map: brushedMetalTexture(), color: '#5a6578', metalness: 0.88, roughness: 0.3 }),
+      counter: new THREE.MeshStandardMaterial({
+        map: plateDiff,
+        normalMap: plateNor,
+        roughnessMap: plateRough,
+        metalnessMap: plateMetal,
+        color: '#8a7a5e',
+        metalness: 1,
+        roughness: 1,
+        emissive: '#1f1208',
+        emissiveIntensity: 0.35
+      }),
+      counterTrim: new THREE.MeshStandardMaterial({
+        map: plateDiff,
+        normalMap: plateNor,
+        roughnessMap: plateRough,
+        metalnessMap: plateMetal,
+        color: '#d9b87a',
+        metalness: 1,
+        roughness: 1
+      }),
+      steel: new THREE.MeshStandardMaterial({
+        map: plateDiff,
+        normalMap: plateNor,
+        roughnessMap: plateRough,
+        metalnessMap: plateMetal,
+        color: '#c8d2e2',
+        metalness: 1,
+        roughness: 1
+      }),
+      darkSteel: new THREE.MeshStandardMaterial({
+        map: plateDiff,
+        normalMap: plateNor,
+        roughnessMap: plateRough,
+        metalnessMap: plateMetal,
+        color: '#6a7588',
+        metalness: 1,
+        roughness: 1
+      }),
       grate: new THREE.MeshStandardMaterial({ color: '#11141a', metalness: 0.9, roughness: 0.35 }),
       flameOuter: new THREE.MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff5a0a', emissiveIntensity: 2.6, transparent: true, opacity: 0.85 }),
       flameInner: new THREE.MeshStandardMaterial({ color: '#ffd84d', emissive: '#ffcf2e', emissiveIntensity: 3, transparent: true, opacity: 0.9 }),
@@ -99,41 +183,18 @@ function useSharedMats(): SharedMats {
         side: THREE.DoubleSide
       })
     }),
-    []
+    [plateDiff, plateNor, plateRough, plateMetal]
   );
 }
 
 /* ------------------------- building blocks ------------------------- */
 
-function MiniBurger({ mats, position, scale = 1 }: { mats: SharedMats; position: [number, number, number]; scale?: number }) {
-  return (
-    <group position={position} scale={scale}>
-      <mesh material={mats.bunTop} position={[0, 0.18, 0]}>
-        <sphereGeometry args={[0.32, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
-      </mesh>
-      <mesh material={mats.cheese} position={[0, 0.12, 0]} rotation={[0, 0.6, 0]}>
-        <boxGeometry args={[0.52, 0.05, 0.52]} />
-      </mesh>
-      <mesh material={mats.patty} position={[0, 0.05, 0]}>
-        <cylinderGeometry args={[0.3, 0.32, 0.12, 12]} />
-      </mesh>
-    </group>
-  );
+function MiniBurger({ position, scale = 1, double = false }: { mats?: SharedMats; position: [number, number, number]; scale?: number; double?: boolean }) {
+  return <Prop url={double ? MODELS.burgerDouble : MODELS.burger} position={position} scale={scale * 1.5} rotationY={position[2] * 1.7} />;
 }
 
-function FryBasket({ mats, position }: { mats: SharedMats; position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      <mesh material={mats.fryBox}>
-        <boxGeometry args={[0.6, 0.55, 0.45]} />
-      </mesh>
-      {[-0.15, 0, 0.15].map((x, i) => (
-        <mesh key={i} material={mats.fries} position={[x, 0.42, (i % 2) * 0.12 - 0.06]} rotation={[0.12 * (i - 1), 0, 0.16 * (i - 1)]}>
-          <boxGeometry args={[0.1, 0.5, 0.1]} />
-        </mesh>
-      ))}
-    </group>
-  );
+function FryBasket({ position }: { mats?: SharedMats; position: [number, number, number] }) {
+  return <Prop url={MODELS.fries} position={position} scale={1.6} rotationY={position[2] * 2.3} />;
 }
 
 const SIGN_HEX = { red: '#ff3b2a', cyan: '#3adcff', amber: '#ffc41f' } as const;
@@ -180,37 +241,18 @@ function NeonSign({
 }
 
 function SauceBottle({ mats, variant, position }: { mats: SharedMats; variant: 'ketchup' | 'mustard'; position: [number, number, number] }) {
-  const body = variant === 'ketchup' ? mats.ketchup : mats.mustard;
   const glow = variant === 'ketchup' ? mats.ketchupGlow : mats.mustardGlow;
-  const tilt = position[0] < 0 ? -0.5 : 0.5;
+  const { scene } = useGLTF(variant === 'ketchup' ? MODELS.ketchup : MODELS.mustard);
+  const tilt = position[0] < 0 ? -0.55 : 0.55;
   return (
     <group position={position} rotation={[0, 0, tilt]}>
-      <mesh material={body}>
-        <cylinderGeometry args={[0.66, 0.74, 2.8, 16]} />
-      </mesh>
-      <mesh material={mats.label} position={[0, 0.12, 0]}>
-        <cylinderGeometry args={[0.68, 0.7, 0.95, 16]} />
-      </mesh>
-      <Text
-        position={[0, 0.12, 0.71]}
-        fontSize={0.23}
-        anchorX="center"
-        anchorY="middle"
-        color={variant === 'ketchup' ? '#b41212' : '#9a6e08'}
-      >
-        {variant === 'ketchup' ? 'KETCHUP' : 'MUSTARD'}
-      </Text>
-      <mesh material={body} position={[0, -1.65, 0]}>
-        <coneGeometry args={[0.48, 0.65, 14]} />
-      </mesh>
-      <mesh material={mats.bottleCap} position={[0, -2.08, 0]}>
-        <cylinderGeometry args={[0.17, 0.22, 0.48, 10]} />
-      </mesh>
+      {/* giant squeeze bottle, flipped nozzle-down */}
+      <Clone object={scene} rotation={[Math.PI, 0, 0]} scale={4.6} position={[0, 1.6, 0]} />
       {/* pouring stream */}
-      <mesh material={glow} position={[0, -2.85, 0]}>
-        <cylinderGeometry args={[0.06, 0.11, 1.2, 8]} />
+      <mesh material={glow} position={[0, -1.0, 0]}>
+        <cylinderGeometry args={[0.06, 0.11, 1.6, 8]} />
       </mesh>
-      <mesh material={glow} position={[0, -3.55, 0]}>
+      <mesh material={glow} position={[0, -1.9, 0]}>
         <sphereGeometry args={[0.16, 10, 8]} />
       </mesh>
     </group>
@@ -265,8 +307,10 @@ function FactoryModule({
             </mesh>
           </group>
         ))}
-        <MiniBurger mats={mats} position={[-0.45, 1.45, 5.6]} scale={1.25} />
-        <MiniBurger mats={mats} position={[0.5, 1.45, 11]} />
+        <MiniBurger position={[-0.45, 1.42, 5.6]} scale={1.25} double />
+        <MiniBurger position={[0.5, 1.42, 11]} />
+        <Prop url={MODELS.hotdog} position={[0.4, 1.42, 1.2]} scale={1.5} rotationY={0.7} />
+        {index % 2 === 0 && <Prop url={MODELS.pizza} position={[-0.5, 1.42, 12.6]} scale={1.4} rotationY={2.1} />}
         {/* heat haze glow over the coals */}
         <mesh material={mats.heatGlowOrange} position={[-1.3, 2.1, 6]} rotation={[0, -Math.PI / 2, 0]} scale={[13, 3.2, 1]}>
           <planeGeometry args={[1, 1]} />
@@ -292,8 +336,10 @@ function FactoryModule({
         <mesh material={mats.vatGlow} position={[0, 1.72, 4]}>
           <boxGeometry args={[2.0, 0.06, 4.6]} />
         </mesh>
-        <FryBasket mats={mats} position={[-0.3, 1.95, 3]} />
-        <FryBasket mats={mats} position={[0.35, 1.95, 5.2]} />
+        <FryBasket position={[-0.3, 1.72, 3]} />
+        <FryBasket position={[0.35, 1.72, 5.2]} />
+        <Prop url={MODELS.soda} position={[-0.4, 1.32, 8.4]} scale={1.7} rotationY={1.2} />
+        {index % 2 === 1 && <Prop url={MODELS.donut} position={[0.45, 1.32, 10.8]} scale={1.6} rotationY={0.4} />}
         {/* hot oil glow above the vat */}
         <mesh material={mats.heatGlowAmber} position={[1.3, 2.2, 4]} rotation={[0, Math.PI / 2, 0]} scale={[7, 2.4, 1]}>
           <planeGeometry args={[1, 1]} />

@@ -1,10 +1,9 @@
-import { MeshReflectorMaterial } from '@react-three/drei';
+import { MeshReflectorMaterial, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { sim } from '../../game/engine';
 import { useRunnerStore } from '../../game/runnerStore';
-import { floorTileTexture } from './textures';
 
 const TRACK_LENGTH = 170;
 const BEHIND = 26;
@@ -31,11 +30,27 @@ export function FactoryTrack() {
   const chevsRef = useRef<THREE.InstancedMesh>(null);
   const quality = useRunnerStore((state) => state.save.settings.quality);
 
-  const tiles = useMemo(() => {
-    const tex = floorTileTexture();
-    tex.repeat.set(8.6 / (TILE_WORLD * TILES_PER_REPEAT), TRACK_LENGTH / (TILE_WORLD * TILES_PER_REPEAT));
-    return tex;
-  }, []);
+  // Poly Haven floor_tiles_06 (CC0) — diffuse / normal / roughness
+  const [tileDiff, tileNor, tileRough] = useTexture([
+    '/textures/floor/floor_tiles_06_diff_1k.jpg',
+    '/textures/floor/floor_tiles_06_nor_gl_1k.jpg',
+    '/textures/floor/floor_tiles_06_rough_1k.jpg'
+  ]);
+
+  /* eslint-disable react-hooks/immutability -- one-time texture configuration */
+  const tileMaps = useMemo(() => {
+    const repeatX = 8.6 / (TILE_WORLD * TILES_PER_REPEAT);
+    const repeatY = TRACK_LENGTH / (TILE_WORLD * TILES_PER_REPEAT);
+    for (const tex of [tileDiff, tileNor, tileRough]) {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repeatX, repeatY);
+      tex.anisotropy = 8;
+    }
+    tileDiff.colorSpace = THREE.SRGBColorSpace;
+    return [tileDiff, tileNor, tileRough] as const;
+  }, [tileDiff, tileNor, tileRough]);
+  /* eslint-enable react-hooks/immutability */
 
   const tmp = useMemo(
     () => ({ m: new THREE.Matrix4(), p: new THREE.Vector3(), q: new THREE.Quaternion(), e: new THREE.Euler(), s: new THREE.Vector3(1, 1, 1) }),
@@ -44,8 +59,11 @@ export function FactoryTrack() {
 
   /* eslint-disable react-hooks/immutability -- imperative r3f per-frame updates */
   useFrame(() => {
-    // scroll the tiles with travel
-    tiles.offset.y = (sim.distance / (TILE_WORLD * TILES_PER_REPEAT)) % 1;
+    // scroll all floor maps with travel
+    const scroll = (sim.distance / (TILE_WORLD * TILES_PER_REPEAT)) % 1;
+    tileMaps[0].offset.y = scroll;
+    tileMaps[1].offset.y = scroll;
+    tileMaps[2].offset.y = scroll;
 
     const wrap = (base: number, span: number) => ((base - sim.distance) % span + span) % span - BEHIND;
 
@@ -110,21 +128,30 @@ export function FactoryTrack() {
         <planeGeometry args={[8.6, TRACK_LENGTH]} />
         {quality === 'high' ? (
           <MeshReflectorMaterial
-            map={tiles}
-            color="#9aa4b8"
+            map={tileMaps[0]}
+            normalMap={tileMaps[1]}
+            roughnessMap={tileMaps[2]}
+            color="#5e6878"
             resolution={512}
-            mirror={0.45}
-            mixStrength={2.6}
+            mirror={0.5}
+            mixStrength={2.8}
             mixBlur={0.9}
             blur={[280, 90]}
             depthScale={0.8}
             minDepthThreshold={0.4}
             maxDepthThreshold={1.4}
-            metalness={0.5}
-            roughness={0.7}
+            metalness={0.35}
+            roughness={1}
           />
         ) : (
-          <meshStandardMaterial map={tiles} color="#9aa4b8" metalness={0.6} roughness={0.4} />
+          <meshStandardMaterial
+            map={tileMaps[0]}
+            normalMap={tileMaps[1]}
+            roughnessMap={tileMaps[2]}
+            color="#5e6878"
+            metalness={0.35}
+            roughness={1}
+          />
         )}
       </mesh>
 
