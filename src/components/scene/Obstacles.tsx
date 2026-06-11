@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { sim } from '../../game/engine';
 import { laneX } from '../../game/math';
 import type { ObstacleEntity, ObstacleKind } from '../../game/types';
+import { cautionStripeTexture } from './textures';
 
 /**
  * Fixed pools of pre-mounted obstacle models. Nothing mounts or unmounts
@@ -45,7 +46,14 @@ function useObstacleMats(): ObstacleMats {
       rollerCore: new THREE.MeshStandardMaterial({ color: '#caa84d', metalness: 0.9, roughness: 0.25, emissive: '#7a5a10', emissiveIntensity: 0.4 }),
       spike: new THREE.MeshStandardMaterial({ color: '#d8dde8', metalness: 0.95, roughness: 0.15 }),
       crate: new THREE.MeshStandardMaterial({ color: '#2b303a', metalness: 0.7, roughness: 0.3 }),
-      crateStripe: new THREE.MeshStandardMaterial({ color: '#ffd84d', emissive: '#caa20e', emissiveIntensity: 0.8 }),
+      crateStripe: new THREE.MeshStandardMaterial({
+        map: cautionStripeTexture(),
+        color: '#ffffff',
+        emissive: '#9a7a0e',
+        emissiveIntensity: 0.45,
+        metalness: 0.3,
+        roughness: 0.5
+      }),
       crateGlow: new THREE.MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff5a0a', emissiveIntensity: 1.6 }),
       flameOuter: new THREE.MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff5a0a', emissiveIntensity: 2.8, transparent: true, opacity: 0.85 }),
       flameInner: new THREE.MeshStandardMaterial({ color: '#ffd84d', emissive: '#ffcf2e', emissiveIntensity: 3.2, transparent: true, opacity: 0.9 }),
@@ -101,11 +109,12 @@ function HotCrateModel({ mats }: { mats: ObstacleMats }) {
       <mesh material={mats.crate} position={[0, 0.75, 0]}>
         <boxGeometry args={[1.7, 1.5, 1.5]} />
       </mesh>
-      <mesh material={mats.crateStripe} position={[0, 1.28, -0.76]}>
-        <boxGeometry args={[1.5, 0.18, 0.02]} />
+      {/* caution stripe band wrapping the crate */}
+      <mesh material={mats.crateStripe} position={[0, 1.32, 0]}>
+        <boxGeometry args={[1.74, 0.24, 1.54]} />
       </mesh>
-      <mesh material={mats.crateStripe} position={[0, 0.22, -0.76]}>
-        <boxGeometry args={[1.5, 0.18, 0.02]} />
+      <mesh material={mats.crateStripe} position={[0, 0.18, 0]}>
+        <boxGeometry args={[1.74, 0.24, 1.54]} />
       </mesh>
       <mesh material={mats.crateGlow} position={[0, 1.52, 0]}>
         <boxGeometry args={[1.6, 0.06, 1.4]} />

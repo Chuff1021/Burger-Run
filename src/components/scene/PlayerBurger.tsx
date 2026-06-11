@@ -28,14 +28,28 @@ export function PlayerBurger({ character }: { character: CharacterDefinition }) 
 
   const mats = useMemo(
     () => ({
-      bunTop: new THREE.MeshStandardMaterial({ color: character.bun, roughness: 0.55, emissive: '#3a1d05', emissiveIntensity: 0.25 }),
+      bunTop: new THREE.MeshPhysicalMaterial({
+        color: character.bun,
+        roughness: 0.42,
+        clearcoat: 0.35,
+        clearcoatRoughness: 0.5,
+        emissive: '#3a1d05',
+        emissiveIntensity: 0.25
+      }),
       bunBottom: new THREE.MeshStandardMaterial({ color: '#d9882f', roughness: 0.6 }),
-      patty: new THREE.MeshStandardMaterial({ color: '#4a2410', roughness: 0.8 }),
-      cheese: new THREE.MeshStandardMaterial({ color: '#ffc83d', roughness: 0.4, emissive: '#7a4a00', emissiveIntensity: 0.35 }),
+      patty: new THREE.MeshStandardMaterial({ color: '#4a2410', roughness: 0.85 }),
+      cheese: new THREE.MeshPhysicalMaterial({
+        color: '#ffc83d',
+        roughness: 0.32,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.35,
+        emissive: '#7a4a00',
+        emissiveIntensity: 0.35
+      }),
       lettuce: new THREE.MeshStandardMaterial({ color: '#5ecf4a', roughness: 0.65 }),
-      tomato: new THREE.MeshStandardMaterial({ color: '#e03a2a', roughness: 0.5 }),
+      tomato: new THREE.MeshPhysicalMaterial({ color: '#e03a2a', roughness: 0.25, clearcoat: 0.7, clearcoatRoughness: 0.25 }),
       sesame: new THREE.MeshStandardMaterial({ color: '#fff3cf', roughness: 0.5 }),
-      jacket: new THREE.MeshStandardMaterial({ color: character.jacket, roughness: 0.35, metalness: 0.15 }),
+      jacket: new THREE.MeshPhysicalMaterial({ color: character.jacket, roughness: 0.4, metalness: 0.1, clearcoat: 0.55, clearcoatRoughness: 0.45 }),
       patch: new THREE.MeshStandardMaterial({ color: character.accent, emissive: character.accent, emissiveIntensity: 0.55, roughness: 0.4 }),
       glove: new THREE.MeshStandardMaterial({ color: '#1a1d24', roughness: 0.5 }),
       cuff: new THREE.MeshStandardMaterial({ color: character.accent, emissive: character.accent, emissiveIntensity: 0.4 }),

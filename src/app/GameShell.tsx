@@ -23,6 +23,9 @@ export default function GameShell() {
         dpr={[1, 1.5]}
         gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
         camera={{ position: [0, 3.6, -6.6], fov: 62, near: 0.1, far: 150 }}
+        onCreated={({ gl }) => {
+          gl.toneMappingExposure = 1.12;
+        }}
       >
         <Suspense fallback={null}>
           <BurgerRunnerScene />

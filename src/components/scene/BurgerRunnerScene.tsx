@@ -1,5 +1,6 @@
+import { Environment, Lightformer } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
+import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@react-three/postprocessing';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { CHARACTER_ROSTER } from '../../game/constants';
@@ -90,14 +91,32 @@ function PostFX() {
   return (
     <EffectComposer multisampling={0}>
       <Bloom
-        intensity={reduced ? 0.55 : 0.95}
-        luminanceThreshold={0.32}
-        luminanceSmoothing={0.18}
+        intensity={reduced ? 0.6 : 1.05}
+        luminanceThreshold={0.26}
+        luminanceSmoothing={0.16}
         mipmapBlur
-        radius={0.72}
+        radius={0.75}
       />
-      <Vignette eskil={false} offset={0.18} darkness={0.78} />
+      <ChromaticAberration offset={[0.0009, 0.0006]} radialModulation modulationOffset={0.4} />
+      <Noise premultiply opacity={0.55} />
+      <Vignette eskil={false} offset={0.16} darkness={0.82} />
     </EffectComposer>
+  );
+}
+
+/** Static studio-style env map: gives metals and gloss something to reflect. */
+function KitchenEnvironment() {
+  return (
+    <Environment resolution={64} frames={1}>
+      {/* warm grill glow, left wall */}
+      <Lightformer intensity={2.2} color="#ff7a2a" position={[9, 5, 8]} rotation-y={-Math.PI / 2} scale={[22, 3, 1]} />
+      {/* cyan strip, right wall */}
+      <Lightformer intensity={2.2} color="#24d6ff" position={[-9, 6, 12]} rotation-y={Math.PI / 2} scale={[22, 3, 1]} />
+      {/* golden ceiling panel ahead */}
+      <Lightformer intensity={1.6} color="#ffd84d" position={[0, 10, 28]} rotation-x={Math.PI / 2} scale={[12, 8, 1]} />
+      {/* dim cool fill behind */}
+      <Lightformer intensity={0.7} color="#22304a" position={[0, 8, -12]} scale={[24, 12, 1]} />
+    </Environment>
   );
 }
 
@@ -120,6 +139,7 @@ export function BurgerRunnerScene() {
       <pointLight position={[-6, 4, 10]} intensity={28} color="#ff7a2a" distance={28} decay={2} />
       <pointLight position={[5, 6, 20]} intensity={30} color="#24d6ff" distance={32} decay={2} />
 
+      <KitchenEnvironment />
       <ShaderWarmup />
       <SimulationStepper />
       <CameraRig />

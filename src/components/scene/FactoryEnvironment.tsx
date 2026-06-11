@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { sim } from '../../game/engine';
+import { brushedMetalTexture, glowStreakTexture, neonSignTexture } from './textures';
 
 const MODULE_LENGTH = 34;
 const MODULE_COUNT = 5;
@@ -41,15 +42,17 @@ interface SharedMats {
   underGlowAmber: THREE.MeshStandardMaterial;
   underGlowCyan: THREE.MeshStandardMaterial;
   vatGlow: THREE.MeshStandardMaterial;
+  heatGlowOrange: THREE.MeshBasicMaterial;
+  heatGlowAmber: THREE.MeshBasicMaterial;
 }
 
 function useSharedMats(): SharedMats {
   return useMemo(
     () => ({
-      counter: new THREE.MeshStandardMaterial({ color: '#2b2218', metalness: 0.5, roughness: 0.42 }),
-      counterTrim: new THREE.MeshStandardMaterial({ color: '#4a3a24', metalness: 0.75, roughness: 0.3 }),
-      steel: new THREE.MeshStandardMaterial({ color: '#4b5566', metalness: 0.9, roughness: 0.28 }),
-      darkSteel: new THREE.MeshStandardMaterial({ color: '#232a36', metalness: 0.85, roughness: 0.32 }),
+      counter: new THREE.MeshStandardMaterial({ color: '#473828', metalness: 0.55, roughness: 0.4, emissive: '#1f1208', emissiveIntensity: 0.5 }),
+      counterTrim: new THREE.MeshStandardMaterial({ map: brushedMetalTexture(), color: '#c9a86a', metalness: 0.85, roughness: 0.3 }),
+      steel: new THREE.MeshStandardMaterial({ map: brushedMetalTexture(), color: '#aebbd2', metalness: 0.92, roughness: 0.26 }),
+      darkSteel: new THREE.MeshStandardMaterial({ map: brushedMetalTexture(), color: '#5a6578', metalness: 0.88, roughness: 0.3 }),
       grate: new THREE.MeshStandardMaterial({ color: '#11141a', metalness: 0.9, roughness: 0.35 }),
       flameOuter: new THREE.MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff5a0a', emissiveIntensity: 2.6, transparent: true, opacity: 0.85 }),
       flameInner: new THREE.MeshStandardMaterial({ color: '#ffd84d', emissive: '#ffcf2e', emissiveIntensity: 3, transparent: true, opacity: 0.9 }),
@@ -76,7 +79,25 @@ function useSharedMats(): SharedMats {
       floor: new THREE.MeshStandardMaterial({ color: '#0a0d13', metalness: 0.5, roughness: 0.6 }),
       underGlowAmber: new THREE.MeshStandardMaterial({ color: '#ffbf3f', emissive: '#ff8a1f', emissiveIntensity: 1.8 }),
       underGlowCyan: new THREE.MeshStandardMaterial({ color: '#24d6ff', emissive: '#1fb9de', emissiveIntensity: 1.8 }),
-      vatGlow: new THREE.MeshStandardMaterial({ color: '#ffb43d', emissive: '#ff9a1f', emissiveIntensity: 1.4 })
+      vatGlow: new THREE.MeshStandardMaterial({ color: '#ffb43d', emissive: '#ff9a1f', emissiveIntensity: 1.4 }),
+      heatGlowOrange: new THREE.MeshBasicMaterial({
+        map: glowStreakTexture(),
+        color: '#ff7a2a',
+        transparent: true,
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      }),
+      heatGlowAmber: new THREE.MeshBasicMaterial({
+        map: glowStreakTexture(),
+        color: '#ffc41f',
+        transparent: true,
+        opacity: 0.45,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
     }),
     []
   );
@@ -115,42 +136,45 @@ function FryBasket({ mats, position }: { mats: SharedMats; position: [number, nu
   );
 }
 
+const SIGN_HEX = { red: '#ff3b2a', cyan: '#3adcff', amber: '#ffc41f' } as const;
+
 function NeonSign({
-  mats,
   text,
   sub,
   position,
   rotationY,
   color
 }: {
-  mats: SharedMats;
+  mats?: SharedMats;
   text: string;
   sub?: string;
   position: [number, number, number];
   rotationY: number;
   color: 'red' | 'cyan' | 'amber';
 }) {
-  const glow = color === 'red' ? mats.signRed : color === 'cyan' ? mats.signCyan : mats.signAmber;
-  const hex = color === 'red' ? '#ff6a55' : color === 'cyan' ? '#7fe8ff' : '#ffe58a';
+  const hex = SIGN_HEX[color];
+  const face = useMemo(() => neonSignTexture(text, hex, sub), [text, hex, sub]);
+  const halo = useMemo(() => glowStreakTexture(), []);
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
-      <mesh material={mats.signBox}>
-        <boxGeometry args={[3.6, 1.25, 0.18]} />
+      {/* additive halo bleeding light onto the wall behind */}
+      <mesh position={[0, 0, -0.06]} scale={[6.2, 3.4, 1]}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial
+          map={halo}
+          color={hex}
+          transparent
+          opacity={0.55}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
       </mesh>
-      <mesh material={glow} position={[0, 0.55, 0.06]}>
-        <boxGeometry args={[3.7, 0.08, 0.1]} />
+      {/* drawn neon face — unmapped tone so bloom grabs it */}
+      <mesh>
+        <planeGeometry args={[3.6, 1.35]} />
+        <meshBasicMaterial map={face} toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
-      <mesh material={glow} position={[0, -0.55, 0.06]}>
-        <boxGeometry args={[3.7, 0.08, 0.1]} />
-      </mesh>
-      <Text position={[0, sub ? 0.14 : 0, 0.12]} fontSize={0.5} anchorX="center" anchorY="middle" color={hex} outlineWidth={0.03} outlineColor="#1a0500" outlineBlur={0.06}>
-        {text}
-      </Text>
-      {sub && (
-        <Text position={[0, -0.34, 0.12]} fontSize={0.2} anchorX="center" anchorY="middle" color="#e8d8c0">
-          {sub}
-        </Text>
-      )}
     </group>
   );
 }
@@ -243,6 +267,10 @@ function FactoryModule({
         ))}
         <MiniBurger mats={mats} position={[-0.45, 1.45, 5.6]} scale={1.25} />
         <MiniBurger mats={mats} position={[0.5, 1.45, 11]} />
+        {/* heat haze glow over the coals */}
+        <mesh material={mats.heatGlowOrange} position={[-1.3, 2.1, 6]} rotation={[0, -Math.PI / 2, 0]} scale={[13, 3.2, 1]}>
+          <planeGeometry args={[1, 1]} />
+        </mesh>
         <NeonSign mats={mats} text="FLAME GRILLED" sub="SINCE 1954" position={[-1.1, 3.1, 6]} rotationY={-Math.PI / 2 + 0.3} color="red" />
       </group>
 
@@ -266,6 +294,10 @@ function FactoryModule({
         </mesh>
         <FryBasket mats={mats} position={[-0.3, 1.95, 3]} />
         <FryBasket mats={mats} position={[0.35, 1.95, 5.2]} />
+        {/* hot oil glow above the vat */}
+        <mesh material={mats.heatGlowAmber} position={[1.3, 2.2, 4]} rotation={[0, Math.PI / 2, 0]} scale={[7, 2.4, 1]}>
+          <planeGeometry args={[1, 1]} />
+        </mesh>
         <NeonSign mats={mats} text="FRY ZONE" position={[1.1, 3.1, 6]} rotationY={Math.PI / 2 - 0.3} color="amber" />
       </group>
 
@@ -303,14 +335,33 @@ function FactoryModule({
         </Text>
       </group>
 
-      {/* -------- side walls -------- */}
+      {/* -------- side walls + neon cornice strips -------- */}
       {[-12.5, 12.5].map((x) => (
-        <mesh key={x} material={mats.wall} position={[x, 4.5, MODULE_LENGTH / 2]}>
-          <boxGeometry args={[1.4, 11.5, MODULE_LENGTH]} />
-        </mesh>
+        <group key={x}>
+          <mesh material={mats.wall} position={[x, 4.5, MODULE_LENGTH / 2]}>
+            <boxGeometry args={[1.4, 11.5, MODULE_LENGTH]} />
+          </mesh>
+          <mesh material={x < 0 ? mats.signCyan : mats.signAmber} position={[x + (x < 0 ? 0.74 : -0.74), 8.6, MODULE_LENGTH / 2]}>
+            <boxGeometry args={[0.06, 0.1, MODULE_LENGTH * 0.96]} />
+          </mesh>
+        </group>
       ))}
 
-      {/* -------- ceiling beam + pipes -------- */}
+      {/* -------- ceiling: deck, light panels, beam + pipes -------- */}
+      <mesh material={mats.wall} position={[0, 11.2, MODULE_LENGTH / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[26, MODULE_LENGTH]} />
+      </mesh>
+      {/* recessed light panels washing the corridor */}
+      {[5, 22].map((z, i) => (
+        <mesh
+          key={z}
+          material={(i + index) % 2 === 0 ? mats.signAmber : mats.signCyan}
+          position={[(i + index) % 2 === 0 ? -3 : 3, 11.1, z]}
+          rotation={[Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[4.2, 1.1]} />
+        </mesh>
+      ))}
       <mesh material={mats.darkSteel} position={[0, 9.6, 12]}>
         <boxGeometry args={[26, 0.55, 1.2]} />
       </mesh>
