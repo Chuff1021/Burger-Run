@@ -1,8 +1,9 @@
 import { Environment } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@react-three/postprocessing';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { boss } from '../../game/bossSim';
 import { CHARACTER_ROSTER } from '../../game/constants';
 import { sim } from '../../game/engine';
 import { BossArena } from './BossArena';
@@ -24,6 +25,10 @@ function CameraRig() {
   const { camera } = useThree();
   const status = useRunnerStore((state) => state.status);
   const yawOffset = useRef(0);
+  // debug/QA handle
+  useEffect(() => {
+    (window as unknown as { __cam: unknown }).__cam = camera;
+  }, [camera]);
 
   /* eslint-disable react-hooks/immutability */
   useFrame((state, dt) => {
@@ -39,21 +44,27 @@ function CameraRig() {
       camera.lookAt(CAMERA_TARGET);
       if ('fov' in camera) {
         const cam = camera as THREE.PerspectiveCamera;
-        cam.fov = THREE.MathUtils.lerp(cam.fov, 58, dt * 2);
+        cam.fov = THREE.MathUtils.lerp(cam.fov, 58, Math.min(1, dt * 2));
         cam.updateProjectionMatrix();
       }
       return;
     }
 
     if (status === 'boss' || status === 'bossDefeat') {
-      // arena framing: pulled back and high so player AND boss fill the shot
-      CAMERA_POSITION.set(sim.laneX * 0.35 + shakeX, 4.8 + shakeY, -9.8);
-      camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.001, dt));
-      CAMERA_TARGET.set(sim.laneX * 0.2, 2.2, 8);
+      // Smash camera: side-on, frame the midpoint of both fighters and zoom
+      // to fit their separation; special-zoom punches in during launches
+      const mid = (sim.laneX + boss.bossX) / 2;
+      const span = Math.abs(sim.laneX - boss.bossX);
+      const punchIn = boss.timeScale < 0.95 ? 0.62 : 1;
+      const dist = THREE.MathUtils.clamp(span * 1.05 + 5.5, 9, 15.5) * punchIn;
+      const height = 3.2 + (sim.playerY + boss.bossY) * 0.18;
+      CAMERA_POSITION.set(mid + shakeX, height + shakeY, -dist);
+      camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.002, dt));
+      CAMERA_TARGET.set(mid, 2.1 + boss.bossY * 0.25, 0);
       camera.lookAt(CAMERA_TARGET);
       if ('fov' in camera) {
         const cam = camera as THREE.PerspectiveCamera;
-        cam.fov = THREE.MathUtils.lerp(cam.fov, 66, dt * 2);
+        cam.fov = THREE.MathUtils.lerp(cam.fov, 54, Math.min(1, dt * 3));
         cam.updateProjectionMatrix();
       }
       return;
@@ -87,7 +98,7 @@ function CameraRig() {
     if ('fov' in camera) {
       const cam = camera as THREE.PerspectiveCamera;
       const boostKick = sim.powerups.speedBoost > 0 ? 8 : 0;
-      cam.fov = THREE.MathUtils.lerp(cam.fov, 62 + Math.min(10, sim.worldSpeed * 0.22) + boostKick, dt * 2.2);
+      cam.fov = THREE.MathUtils.lerp(cam.fov, 62 + Math.min(10, sim.worldSpeed * 0.22) + boostKick, Math.min(1, dt * 2.2));
       cam.updateProjectionMatrix();
     }
   });
@@ -140,12 +151,19 @@ function PostFX() {
 }
 
 /**
- * Real HDRI environment (Poly Haven "metro noord", CC0): a night metro
- * corridor with warm/cool artificial lights — photographic reflections for
- * every metal, clearcoat, and glossy surface in the kitchen.
+ * Custom AI-generated burger-factory panorama (NVIDIA FLUX): red-tiled neon
+ * kitchen with flame grills and sauce-bottle shelves — bespoke reflections
+ * and ambient color for every metal and glossy surface in the game.
  */
 function KitchenEnvironment() {
-  return <Environment files="/hdri/metro_noord_1k.hdr" environmentIntensity={0.85} />;
+  const pano = useLoader(THREE.TextureLoader, '/hdri/burger_factory_pano.jpg');
+  /* eslint-disable react-hooks/immutability -- one-time texture configuration */
+  useMemo(() => {
+    pano.mapping = THREE.EquirectangularReflectionMapping;
+    pano.colorSpace = THREE.SRGBColorSpace;
+  }, [pano]);
+  /* eslint-enable react-hooks/immutability */
+  return <Environment map={pano} environmentIntensity={1.05} />;
 }
 
 export function BurgerRunnerScene() {
@@ -172,12 +190,16 @@ export function BurgerRunnerScene() {
       <ShaderWarmup />
       <SimulationStepper />
       <CameraRig />
-      <FactoryTrack />
-      <FactoryEnvironment />
-      <Obstacles />
-      <Collectibles />
-      <Powerups />
-      <Effects />
+      {!inBossFight && (
+        <>
+          <FactoryTrack />
+          <FactoryEnvironment />
+          <Obstacles />
+          <Collectibles />
+          <Powerups />
+          <Effects />
+        </>
+      )}
       <PlayerBurger character={character} />
       {inBossFight && <BossArena />}
       <PostFX />

@@ -35,6 +35,7 @@ export function useRunnerInput() {
       if (key === 'arrowright' || key === 'd') store.moveLane(1);
       if (key === 'arrowup' || key === 'w' || key === ' ') store.jump();
       if (key === 'arrowdown' || key === 's') store.slide();
+      if (key === 'f' || key === 'enter') store.attack();
       if (key === 'p' || key === 'escape') {
         if (store.status === 'running') store.pause();
         else if (store.status === 'paused') store.resume();
@@ -62,6 +63,13 @@ export function useRunnerInput() {
       if (!start || start.id !== event.pointerId) return;
       gesture.current = null;
       if (start.fired) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      // a release without meaningful travel = TAP (attack in boss fights)
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 12) {
+        useRunnerStore.getState().attack();
+        return;
+      }
       // quick flick fallback: resolved on release with a lower bar
       apply(resolveSwipeGesture(start, { x: event.clientX, y: event.clientY }, SWIPE_RELEASE_PX));
     };

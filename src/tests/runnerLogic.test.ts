@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { boss, bossJump, bossMoveLane, bossSlide, startBoss, stepBoss } from '../game/bossSim';
+import { boss, bossJump, bossSlide, bossTap, startBoss, stepBoss } from '../game/bossSim';
 import { JUMP_VELOCITY, LANES, LANE_CHANGE_TIME, OBSTACLES, POWERUP_DURATION } from '../game/constants';
 import { bendPoint, jump, moveLane, resetSim, sim, slide, stepSim } from '../game/engine';
 import { resolveSwipeGesture } from '../game/input';
@@ -286,7 +286,7 @@ describe('campaign mode', () => {
   });
 });
 
-describe('boss fight', () => {
+describe('boss fight (smash-style)', () => {
   function step(seconds: number) {
     let last: 'fighting' | 'won' | 'lost' = 'fighting';
     for (let i = 0; i < Math.ceil(seconds * 60); i += 1) last = stepBoss(1 / 60);
@@ -295,87 +295,136 @@ describe('boss fight', () => {
 
   beforeEach(() => {
     startBoss();
-    step(2.5); // through the intro
+    step(2.6); // through the intro
   });
 
-  it('starts round 1 after the intro', () => {
-    expect(boss.phase).toBe('dodge');
+  it('starts the first attack round after the intro', () => {
+    expect(['attack', 'recovery']).toContain(boss.phase);
     expect(boss.hp).toBe(3);
     expect(boss.hearts).toBe(3);
+    expect(boss.percent).toBe(0);
   });
 
-  it('standing in the slam lane costs a heart; dodging fills the meter', () => {
-    // walk into every attack: never move/jump/slide
-    while (boss.phase === 'dodge' && boss.hearts === 3) stepBoss(1 / 60);
-    expect(boss.hearts).toBeLessThan(3);
+  it('attacks only damage the boss during punish windows (clank otherwise)', () => {
+    // force a non-vulnerable moment
+    boss.phase = 'attack';
+    boss.attack = null;
+    sim.laneX = boss.bossX + 2; // in range
+    bossTap();
+    step(0.12); // through startup
+    expect(boss.percent).toBe(0); // clanked, no damage
 
-    // restart and dodge the first attack properly
-    startBoss();
-    step(2.5);
-    const attack = (() => {
-      while (!boss.attack) stepBoss(1 / 60);
-      return boss.attack!;
-    })();
-    if (attack.type === 'slam') bossMoveLane(attack.lane === 1 ? 1 : attack.lane === 0 ? 1 : -1);
-    if (attack.type === 'lowSweep' || attack.type === 'shockwave') {
-      step(Math.max(0, attack.telegraph - 0.3));
-      bossJump();
-    }
-    if (attack.type === 'highSweep') {
-      step(Math.max(0, attack.telegraph - 0.3));
-      bossSlide();
-    }
-    const meterBefore = boss.meter;
-    while (boss.attack && !boss.attack.resolved) stepBoss(1 / 60);
-    expect(boss.meter).toBeGreaterThan(meterBefore);
-    expect(boss.hearts).toBe(3);
+    boss.phase = 'recovery';
+    boss.phaseT = 0;
+    boss.atkPhase = 'idle';
+    sim.laneX = boss.bossX + 2;
+    bossTap();
+    step(0.12);
+    expect(boss.percent).toBeGreaterThan(0);
+    expect(boss.hitstopT).toBeGreaterThan(0); // hitstop applied
   });
 
-  it('dodging the windup staggers; strikes drop a pip', () => {
-    // survive the dodge round with god-mode dodges by hopping at every resolve
-    while (boss.phase === 'dodge') {
-      if (boss.attack && !boss.attack.resolved) {
-        if (boss.attack.type === 'slam') {
-          if (sim.lane === boss.attack.lane) bossMoveLane(sim.lane === 2 ? -1 : 1);
-        } else if (boss.attack.type === 'highSweep') {
-          if (boss.attack.t > boss.attack.telegraph - 0.4) bossSlide();
-        } else if (boss.attack.t > boss.attack.telegraph - 0.3 && sim.grounded) {
-          bossJump();
-        }
-      }
-      stepBoss(1 / 60);
+  it('whiffed attacks out of range deal nothing and drop the combo', () => {
+    boss.phase = 'recovery';
+    boss.phaseT = 0;
+    sim.laneX = boss.bossX + 6; // far away
+    bossTap();
+    step(0.12);
+    expect(boss.percent).toBe(0);
+    expect(boss.combo).toBe(0);
+  });
+
+  it('percent crossing the first threshold launches a pip', () => {
+    boss.phase = 'stagger';
+    boss.phaseT = 0;
+    sim.laneX = boss.bossX + 2;
+    let guard = 0;
+    while (boss.hp === 3 && guard < 40) {
+      boss.phase = 'stagger';
+      boss.phaseT = 0;
+      boss.atkPhase = 'idle';
+      bossTap();
+      step(0.5); // ride through hitstop + attack frames
+      guard += 1;
     }
-    expect(boss.phase).toBe('windup');
-    // jump the big one just before it lands
-    step(1.45);
-    bossJump();
-    step(0.4);
-    expect(boss.phase === 'stagger' || boss.phase === 'strike').toBe(true);
-    // ride into the strike window and land hits
-    while (boss.phase === 'stagger') stepBoss(1 / 60);
-    expect(boss.phase).toBe('strike');
-    bossJump();
-    expect(boss.combo).toBeGreaterThan(0);
-    step(4);
     expect(boss.hp).toBe(2);
-    expect(boss.phase).toBe('dodge');
+    expect(['launch', 'attack']).toContain(boss.phase as string);
+    expect(boss.timeScale).toBeLessThan(1); // special-zoom slow-mo kicked in
   });
 
-  it('losing all hearts ends in defeat', () => {
+  it('knockback grows with percent (Smash scaling)', () => {
+    boss.phase = 'stagger';
+    boss.atkPhase = 'idle';
+    sim.laneX = boss.bossX + 2;
+    boss.percent = 0;
+    bossTap();
+    step(0.12);
+    const kbLow = Math.abs(boss.bossVelX);
+    boss.percent = 120;
+    boss.phase = 'stagger';
+    boss.atkPhase = 'idle';
+    boss.hitstopT = 0;
+    sim.laneX = boss.bossX + 2;
+    bossTap();
+    step(0.12);
+    expect(Math.abs(boss.bossVelX)).toBeGreaterThan(kbLow);
+  });
+
+  it('tap buffering chains attacks (160ms buffer)', () => {
+    boss.phase = 'stagger';
+    boss.phaseT = 0;
+    sim.laneX = boss.bossX + 2;
+    bossTap();
+    step(0.1); // mid attack
+    bossTap(); // buffered
+    expect(boss.atkBuffer).toBeGreaterThan(0);
+    step(0.6);
+    expect(boss.combo).toBeGreaterThanOrEqual(2);
+  });
+
+  it('standing in attacks costs hearts; zero hearts = defeat', () => {
     boss.hearts = 1;
-    while (boss.phase === 'dodge' && boss.hearts > 0) stepBoss(1 / 60);
+    let guard = 0;
+    while (boss.phase !== 'defeat' && guard < 60 * 30) {
+      stepBoss(1 / 60);
+      guard += 1;
+    }
     expect(boss.phase).toBe('defeat');
     expect(step(2)).toBe('lost');
   });
 
-  it('three pips down = victory', () => {
-    boss.hp = 1;
-    boss.phase = 'strike';
+  it('dodging the big windup staggers the boss', () => {
+    boss.phase = 'windup';
     boss.phaseT = 0;
+    step(1.32);
     bossJump();
-    const result = step(6.5);
+    step(0.4);
+    expect(boss.phase).toBe('stagger');
+  });
+
+  it('super slam requires full meter and refills a heart', () => {
+    boss.phase = 'stagger';
+    boss.phaseT = 0;
+    boss.meter = 1;
+    boss.hearts = 2;
+    sim.laneX = boss.bossX + 2;
+    bossSlide();
+    expect(boss.percent).toBeGreaterThanOrEqual(35);
+    expect(boss.hearts).toBe(3);
+    expect(boss.meter).toBe(0);
+  });
+
+  it('third pip launch = victory', () => {
+    boss.hp = 1;
+    boss.percent = 195;
+    boss.phase = 'stagger';
+    boss.phaseT = 0;
+    sim.laneX = boss.bossX + 2;
+    bossTap();
+    step(0.3);
     expect(boss.hp).toBe(0);
-    expect(result).toBe('won');
+    expect(boss.phase as string).toBe('victory');
+    expect(step(5)).toBe('won');
   });
 });
 

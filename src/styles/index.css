@@ -436,6 +436,35 @@ button:disabled {
   filter: grayscale(1);
 }
 
+.boss-percent {
+  margin-left: 10px;
+  color: #fff8e6;
+  font: 400 1.4rem 'Titan One', sans-serif;
+  text-shadow: 0 2px 0 rgba(40, 30, 10, 0.9), 0 0 14px rgba(255, 248, 230, 0.5);
+}
+
+.boss-percent.warm {
+  color: var(--gold);
+  text-shadow: 0 2px 0 rgba(122, 53, 8, 0.9), 0 0 18px rgba(255, 191, 63, 0.8);
+}
+
+.boss-percent.hot {
+  color: #ff3b2a;
+  text-shadow: 0 2px 0 rgba(90, 12, 6, 0.9), 0 0 20px rgba(255, 59, 42, 0.9);
+  animation: turn-pulse 0.4s ease-in-out infinite;
+}
+
+.combo-counter {
+  position: absolute;
+  top: 32vh;
+  right: 12vw;
+  color: var(--gold);
+  font: 400 clamp(1.4rem, 5vw, 2.4rem) 'Titan One', sans-serif;
+  text-shadow: 0 3px 0 rgba(122, 53, 8, 0.9), 0 0 26px rgba(255, 191, 63, 0.8);
+  transform: rotate(8deg);
+  animation: toast-pop 1.2s ease-out forwards;
+}
+
 .smash-meter {
   position: absolute;
   bottom: max(18px, env(safe-area-inset-bottom));

@@ -5,7 +5,10 @@ export function BossHUD() {
   const bossHp = useRunnerStore((state) => state.bossHp);
   const bossHearts = useRunnerStore((state) => state.bossHearts);
   const bossMeter = useRunnerStore((state) => state.bossMeter);
+  const bossPercent = useRunnerStore((state) => state.bossPercent);
+  const bossCombo = useRunnerStore((state) => state.bossCombo);
   const prompt = useRunnerStore((state) => state.bossPromptText);
+  const heat = bossPercent < 70 ? '' : bossPercent < 140 ? 'warm' : 'hot';
 
   return (
     <section className="hud-layer boss-hud" aria-label="Boss fight HUD">
@@ -16,7 +19,7 @@ export function BossHUD() {
         ))}
       </div>
 
-      {/* boss name + pips */}
+      {/* boss name + pips + Smash-style damage percent */}
       <div className="boss-bar">
         <strong>THE MEGA MANAGER</strong>
         <div className="boss-pips">
@@ -25,8 +28,16 @@ export function BossHUD() {
               🍔
             </span>
           ))}
+          <span className={`boss-percent ${heat}`}>{bossPercent}%</span>
         </div>
       </div>
+
+      {/* combo counter (re-keyed so the pop animation replays per hit) */}
+      {bossCombo > 1 && (
+        <div key={bossCombo} className="combo-counter">
+          {bossCombo} HITS!
+        </div>
+      )}
 
       {/* smash meter */}
       <div className={`smash-meter ${bossMeter >= 1 ? 'ready' : ''}`}>

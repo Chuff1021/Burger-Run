@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { playCue, startMusic, stopMusic } from './audioManager';
-import { boss, bossJump, bossMoveLane, bossPrompt, bossSlide, startBoss, stepBoss, stopBoss } from './bossSim';
+import { boss, bossJump, bossMoveLane, bossPrompt, bossSlide, bossTap, startBoss, stepBoss, stopBoss } from './bossSim';
 import { CAMPAIGN_LIVES, EMPTY_POWERUPS, GOALS, RESPAWN_DELAY_MS, SECTION_COIN_STAR } from './constants';
 import { jump as engineJump, moveLane as engineMoveLane, resetSim, sim, slide as engineSlide, stepSim, stopSim } from './engine';
 import { triggerHaptic } from './haptics';
@@ -31,6 +31,8 @@ interface RunnerStore {
   bossHp: number;
   bossHearts: number;
   bossMeter: number;
+  bossPercent: number;
+  bossCombo: number;
   bossPromptText: string;
   bossDefeated: boolean;
   score: number;
@@ -56,6 +58,7 @@ interface RunnerStore {
   moveLane: (direction: -1 | 1) => void;
   jump: () => void;
   slide: () => void;
+  attack: () => void;
   retryBoss: () => void;
   tick: (dt: number) => void;
   setActivePanel: (panel: RunnerStore['activePanel']) => void;
@@ -107,6 +110,8 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
   bossHp: 3,
   bossHearts: 3,
   bossMeter: 0,
+  bossPercent: 0,
+  bossCombo: 0,
   bossPromptText: '',
   bossDefeated: false,
   score: 0,
@@ -213,12 +218,17 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
     }
   },
 
+  attack: () => {
+    if (get().status !== 'boss') return;
+    bossTap();
+  },
+
   retryBoss: () => {
     const settings = get().save.settings;
     playCue('start', settings.audio);
     startMusic(settings.audio && settings.music);
     startBoss();
-    set({ status: 'boss', bossHp: 3, bossHearts: 3, bossMeter: 0, bossPromptText: bossPrompt() });
+    set({ status: 'boss', bossHp: 3, bossHearts: 3, bossMeter: 0, bossPercent: 0, bossCombo: 0, bossPromptText: bossPrompt() });
   },
 
   tick: (dt) => {
@@ -244,7 +254,10 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
             break;
           case 'bossHit':
             playCue('punch', settings.audio);
-            triggerHaptic(20, settings.haptics);
+            triggerHaptic(event.damage >= 18 ? [25, 20, 25] : 20, settings.haptics);
+            break;
+          case 'clank':
+            playCue('uiClick', settings.audio);
             break;
           case 'superSlam':
             playCue('bossRoar', settings.audio);
@@ -252,6 +265,10 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
             break;
           case 'stagger':
             playCue('shieldBreak', settings.audio);
+            break;
+          case 'launch':
+            playCue('bossRoar', settings.audio);
+            triggerHaptic([30, 50, 70], settings.haptics);
             break;
           case 'roundStart':
             playCue('bossRoar', settings.audio);
@@ -295,7 +312,14 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
       hudAccumulator += dt;
       if (hudAccumulator >= 0.1) {
         hudAccumulator = 0;
-        set({ bossHp: boss.hp, bossHearts: boss.hearts, bossMeter: boss.meter, bossPromptText: bossPrompt() });
+        set({
+          bossHp: boss.hp,
+          bossHearts: boss.hearts,
+          bossMeter: boss.meter,
+          bossPercent: Math.round(boss.percent),
+          bossCombo: boss.combo,
+          bossPromptText: bossPrompt()
+        });
       }
       return;
     }

@@ -3,62 +3,85 @@ import {
   FAST_FALL_VELOCITY,
   GRAVITY,
   JUMP_VELOCITY,
-  LANES,
-  LANE_CHANGE_TIME,
-  SLIDE_DURATION
+  LANE_CHANGE_TIME
 } from './constants';
 import { sim } from './engine';
 import { clamp } from './math';
 
 /**
- * "Lane Brawler" boss fight. Runs while the runner sim is frozen and PUPPETS
- * the same sim movement fields (laneX/playerY/slideTimer/...) so the existing
- * character, camera shake, and effects render unchanged. The boss attacks in
- * telegraphed lane patterns; clean dodges fill the smash meter; dodging the
- * big windup staggers the boss and opens a strike window.
+ * Smash-style boss fight, side view. Fight axis = world X: the player
+ * (rendered via the puppeted sim fields) duels THE MEGA MANAGER across a
+ * floating stage. Mechanics built from fighting-game research:
+ * - hitstop: Smash formula floor(d*0.65+6) frames, both fighters freeze
+ * - input buffer: 160ms tap buffer (Smash Ultimate uses 9f)
+ * - knockback: simplified Smash formula, scales with accumulated percent
+ * - frame data: light 5f startup / 3f active / 10f recovery, chains to a
+ *   heavy on the 3rd hit (Tough Love Arena chain pattern)
+ * - boss telegraphs 0.8-1.4s, long recoveries = punish windows
  */
 
-export type BossPhase = 'intro' | 'dodge' | 'windup' | 'stagger' | 'strike' | 'victory' | 'defeat';
+export type BossPhase = 'intro' | 'attack' | 'recovery' | 'windup' | 'stagger' | 'launch' | 'victory' | 'defeat';
 
 export type AttackType = 'slam' | 'lowSweep' | 'highSweep' | 'shockwave';
 
 export interface BossAttack {
   type: AttackType;
-  lane: number;
-  /** seconds the telegraph shows before the hit lands */
+  /** zone center (slam) in world X */
+  zoneX: number;
   telegraph: number;
   t: number;
   resolved: boolean;
+  /** travelling pin position for sweeps */
+  pinX: number;
+  prevPinX: number;
 }
 
 export type BossEvent =
   | { type: 'dodge' }
   | { type: 'playerHit' }
-  | { type: 'bossHit'; combo: number }
+  | { type: 'bossHit'; combo: number; damage: number }
+  | { type: 'clank' }
   | { type: 'superSlam' }
   | { type: 'stagger' }
   | { type: 'meterFull' }
+  | { type: 'launch'; pip: number }
   | { type: 'roundStart'; pip: number }
   | { type: 'victory' }
   | { type: 'defeat' };
+
+type PlayerAtkPhase = 'idle' | 'startup' | 'active' | 'recover';
 
 export interface BossSim {
   active: boolean;
   time: number;
   phase: BossPhase;
   phaseT: number;
-  hp: number; // pips, 3 → 0
+  /** pips remaining (3 → 0); a pip falls when percent crosses its threshold */
+  hp: number;
+  /** Smash-style accumulated damage percent */
+  percent: number;
   hearts: number;
-  meter: number; // 0..1
+  meter: number;
   combo: number;
   invulnT: number;
-  strikeCooldown: number;
+  /** hitstop freeze remaining (everything pauses) */
+  hitstopT: number;
+  /** slow-mo factor for the launch "special zoom" */
+  timeScale: number;
   score: number;
   attack: BossAttack | null;
-  queue: BossAttack[];
-  /** scene animation drivers */
-  bossLane: number; // lane the boss is acting on (for lunges)
-  hitFlash: number; // boss flash on being struck
+  queue: AttackType[];
+  /** boss body position/motion */
+  bossX: number;
+  bossY: number;
+  bossVelX: number;
+  bossVelY: number;
+  /** player attack state machine */
+  atkPhase: PlayerAtkPhase;
+  atkT: number;
+  atkHeavy: boolean;
+  atkBuffer: number;
+  hitFlash: number;
   events: BossEvent[];
 }
 
@@ -74,47 +97,73 @@ export const boss: BossSim = {
   phase: 'intro',
   phaseT: 0,
   hp: 3,
+  percent: 0,
   hearts: 3,
   meter: 0,
   combo: 0,
   invulnT: 0,
-  strikeCooldown: 0,
+  hitstopT: 0,
+  timeScale: 1,
   score: 0,
   attack: null,
   queue: [],
-  bossLane: 1,
+  bossX: -8,
+  bossY: 0,
+  bossVelX: 0,
+  bossVelY: 0,
+  atkPhase: 'idle',
+  atkT: 0,
+  atkHeavy: false,
+  atkBuffer: 0,
   hitFlash: 0,
   events: []
 };
 
 if (typeof window !== 'undefined') window.__burgerBoss = boss;
 
+/* ------------------------------ tuning ------------------------------ */
+
+export const STAGE_MIN_X = -7.5; // player can chase deep into boss territory
+export const STAGE_MAX_X = 2.5;
+export const BOSS_HOME_X = -8;
+const BOSS_MIN_X = -10.5;
+const DASH_STEP = 1.9;
+
 const INTRO_TIME = 2.4;
-const WINDUP_TIME = 1.7;
-const STAGGER_TIME = 0.9;
-const STRIKE_TIME = 3.4;
-const RECOVER_BETWEEN_ATTACKS = 0.5;
-const METER_PER_DODGE = 0.2;
-const VICTORY_TIME = 2.8;
+const RECOVERY_TIME = 1.25; // punish window after each boss attack
+const WINDUP_TIME = 1.5;
+const STAGGER_TIME = 3.5; // big punish window
+const LAUNCH_TIME = 1.7;
+const VICTORY_TIME = 2.6;
 const DEFEAT_TIME = 1.6;
 
-function buildRound(pip: number): BossAttack[] {
-  const speed = pip === 3 ? 1.0 : pip === 2 ? 0.84 : 0.7;
-  const tg = (base: number) => base * speed;
-  const lane = () => Math.floor(Math.random() * 3);
-  const rounds: Record<number, AttackType[]> = {
-    3: ['slam', 'lowSweep', 'slam', 'highSweep'],
-    2: ['slam', 'highSweep', 'shockwave', 'slam', 'lowSweep'],
-    1: ['shockwave', 'slam', 'lowSweep', 'highSweep', 'slam', 'shockwave']
-  };
-  return (rounds[pip] ?? rounds[1]).map((type) => ({
-    type,
-    lane: lane(),
-    telegraph: tg(type === 'shockwave' ? 1.25 : 1.0),
-    t: 0,
-    resolved: false
-  }));
+const ATK_STARTUP = 0.085; // ~5f
+const ATK_ACTIVE = 0.05; // ~3f
+const ATK_RECOVER = 0.17; // ~10f
+const ATK_RANGE = 3.2;
+const ATK_LUNGE = 0.95;
+/** buffer must outlive active+recover (~220ms) so mash-chains connect */
+const ATK_BUFFER_TIME = 0.28;
+const LIGHT_DMG = 12;
+const HEAVY_DMG = 18;
+const SUPER_DMG = 35;
+/** percent thresholds where the next hit LAUNCHES a pip away */
+const PIP_THRESHOLDS = [60, 130, 200];
+const METER_PER_DODGE = 0.2;
+
+function hitstopFor(damage: number): number {
+  // Smash: floor(d*0.65+6) frames @60fps, capped
+  return Math.min(0.3, ((damage * 0.65 + 6) / 60) * 0.85);
 }
+
+function knockbackFor(damage: number): number {
+  // simplified SmashWiki formula, w=100, s=0.85, b=30
+  const p = boss.percent;
+  const kb = ((p / 10 + (p * damage) / 20) * 1.4 + 18) * 0.85 + 30;
+  return kb * 0.02; // world-units impulse
+}
+
+/* ------------------------------ control ------------------------------ */
 
 export function startBoss() {
   boss.active = true;
@@ -122,21 +171,30 @@ export function startBoss() {
   boss.phase = 'intro';
   boss.phaseT = 0;
   boss.hp = 3;
+  boss.percent = 0;
   boss.hearts = 3;
   boss.meter = 0;
   boss.combo = 0;
   boss.invulnT = 0;
-  boss.strikeCooldown = 0;
+  boss.hitstopT = 0;
+  boss.timeScale = 1;
   boss.score = 0;
   boss.attack = null;
   boss.queue = [];
-  boss.bossLane = 1;
+  boss.bossX = BOSS_HOME_X;
+  boss.bossY = 0;
+  boss.bossVelX = 0;
+  boss.bossVelY = 0;
+  boss.atkPhase = 'idle';
+  boss.atkT = 0;
+  boss.atkHeavy = false;
+  boss.atkBuffer = 0;
   boss.hitFlash = 0;
   boss.events.length = 0;
-  // park the puppet in the center lane
+  // park the puppet stage-left, facing the boss
   sim.lane = 1;
-  sim.laneX = 0;
-  sim.laneFromX = 0;
+  sim.laneX = 1.2;
+  sim.laneFromX = 1.2;
   sim.laneT = 1;
   sim.playerY = 0;
   sim.verticalVelocity = 0;
@@ -147,31 +205,26 @@ export function startBoss() {
 
 export function stopBoss() {
   boss.active = false;
+  boss.timeScale = 1;
 }
 
-/* ----------------------------- input ----------------------------- */
+function fightInputBlocked(): boolean {
+  return !boss.active || boss.phase === 'victory' || boss.phase === 'defeat' || boss.phase === 'launch';
+}
 
+/** swipe left/right = spacing dash along the fight axis (screen dir = -X right) */
 export function bossMoveLane(direction: -1 | 1) {
-  if (!boss.active || boss.phase === 'victory' || boss.phase === 'defeat') return;
-  const next = clamp(sim.lane + direction, 0, 2);
-  if (next === sim.lane) return;
+  if (fightInputBlocked()) return;
+  const target = clamp(sim.laneX + (direction === 1 ? -DASH_STEP : DASH_STEP), STAGE_MIN_X, STAGE_MAX_X);
   sim.laneFromX = sim.laneX;
-  sim.lane = next;
   sim.laneT = 0;
+  // store the dash target in lane slot 1's stead — we drive laneX manually
+  dashTarget = target;
 }
+let dashTarget = 1.2;
 
 export function bossJump(): boolean {
-  if (!boss.active || boss.phase === 'victory' || boss.phase === 'defeat') return false;
-  // during the strike window an up-swipe is a HIT, not a jump
-  if (boss.phase === 'strike') {
-    if (boss.strikeCooldown > 0) return false;
-    boss.strikeCooldown = 0.32;
-    boss.combo += 1;
-    boss.hitFlash = 1;
-    boss.score += 150;
-    boss.events.push({ type: 'bossHit', combo: boss.combo });
-    return true;
-  }
+  if (fightInputBlocked()) return false;
   if (!sim.grounded) return false;
   sim.verticalVelocity = JUMP_VELOCITY;
   sim.grounded = false;
@@ -180,43 +233,79 @@ export function bossJump(): boolean {
 }
 
 export function bossSlide(): boolean {
-  if (!boss.active || boss.phase === 'victory' || boss.phase === 'defeat') return false;
-  // full meter + down-swipe in the strike window = BURGER SLAM super
-  if (boss.phase === 'strike' && boss.meter >= 1) {
+  if (fightInputBlocked()) return false;
+  // full meter during a punish window = BURGER SLAM super
+  if ((boss.phase === 'recovery' || boss.phase === 'stagger') && boss.meter >= 1) {
     boss.meter = 0;
-    boss.combo += 3;
-    boss.hitFlash = 1;
-    boss.score += 600;
+    landHit(SUPER_DMG, true);
     boss.hearts = Math.min(3, boss.hearts + 1);
     boss.events.push({ type: 'superSlam' });
-    endStrike();
     return true;
   }
   if (!sim.grounded) {
     sim.verticalVelocity = FAST_FALL_VELOCITY;
     return true;
   }
-  sim.slideTimer = SLIDE_DURATION;
+  sim.slideTimer = 0.6; // duck
   return true;
 }
 
-/* ----------------------------- phases ----------------------------- */
-
-function isSlidingNow(): boolean {
-  return sim.slideTimer > 0 && sim.playerY < 0.2;
+/** TAP = attack (light, chains into a heavy on the 3rd hit) */
+export function bossTap() {
+  if (fightInputBlocked()) return;
+  if (boss.atkPhase === 'idle') {
+    beginAttack();
+  } else {
+    boss.atkBuffer = ATK_BUFFER_TIME; // buffered — fires when recover ends
+  }
 }
 
-function dodgedAttack(attack: BossAttack): boolean {
-  switch (attack.type) {
-    case 'slam':
-      return sim.lane !== attack.lane;
-    case 'lowSweep':
-      return sim.playerY > 0.55;
-    case 'highSweep':
-      return isSlidingNow();
-    case 'shockwave':
-      return sim.playerY > 0.35;
+function beginAttack() {
+  boss.atkPhase = 'startup';
+  boss.atkT = 0;
+  boss.atkHeavy = boss.combo > 0 && (boss.combo + 1) % 3 === 0;
+  // lunge toward the boss
+  sim.laneFromX = sim.laneX;
+  sim.laneT = 0;
+  dashTarget = clamp(sim.laneX - ATK_LUNGE, STAGE_MIN_X, STAGE_MAX_X);
+}
+
+function bossVulnerable(): boolean {
+  return boss.phase === 'recovery' || boss.phase === 'stagger';
+}
+
+function landHit(damage: number, isSuper = false) {
+  const staggerBonus = boss.phase === 'stagger' ? 1.25 : 1;
+  const dealt = Math.round(damage * staggerBonus);
+  boss.percent += dealt;
+  boss.combo += 1;
+  boss.score += dealt * 12;
+  boss.hitFlash = 1;
+  boss.hitstopT = hitstopFor(dealt);
+  sim.shake = Math.min(1, 0.25 + dealt * 0.02);
+  // he's a heavyweight: normal hits nudge him (so combos stay in reach),
+  // launches use the full Smash impulse
+  const kb = knockbackFor(dealt);
+  boss.bossVelX = -kb * 0.45 * (isSuper ? 1.6 : 1);
+  boss.bossVelY = kb * 0.3;
+  boss.events.push({ type: 'bossHit', combo: boss.combo, damage: dealt });
+
+  // crossing a pip threshold = LAUNCH
+  const threshold = PIP_THRESHOLDS[3 - boss.hp];
+  if (boss.percent >= threshold) {
+    boss.hp -= 1;
+    boss.timeScale = 0.35; // special-zoom slow-mo
+    boss.bossVelX = -kb * 2.6 - 6;
+    boss.bossVelY = kb * 1.4 + 7;
+    setPhase(boss.hp <= 0 ? 'victory' : 'launch');
+    boss.events.push(boss.hp <= 0 ? { type: 'victory' } : { type: 'launch', pip: boss.hp });
   }
+}
+
+/* ------------------------------ phases ------------------------------ */
+
+function isDucking(): boolean {
+  return sim.slideTimer > 0 && sim.playerY < 0.2;
 }
 
 function setPhase(phase: BossPhase) {
@@ -224,22 +313,30 @@ function setPhase(phase: BossPhase) {
   boss.phaseT = 0;
 }
 
-function endStrike() {
-  boss.hp -= 1;
-  boss.combo = 0;
-  if (boss.hp <= 0) {
-    setPhase('victory');
-    boss.events.push({ type: 'victory' });
-  } else {
-    boss.queue = buildRound(boss.hp);
-    boss.attack = null;
-    setPhase('dodge');
-    boss.events.push({ type: 'roundStart', pip: boss.hp });
-  }
+function makeAttack(type: AttackType): BossAttack {
+  const speed = boss.hp === 3 ? 1 : boss.hp === 2 ? 0.85 : 0.72;
+  return {
+    type,
+    zoneX: sim.laneX,
+    telegraph: (type === 'shockwave' ? 1.35 : type === 'slam' ? 1.0 : 0.9) * speed,
+    t: 0,
+    resolved: false,
+    pinX: boss.bossX + 1.5,
+    prevPinX: boss.bossX + 1.5
+  };
 }
 
-function resolveHit(attack: BossAttack) {
-  if (dodgedAttack(attack)) {
+function roundQueue(pip: number): AttackType[] {
+  const rounds: Record<number, AttackType[]> = {
+    3: ['slam', 'lowSweep', 'highSweep'],
+    2: ['lowSweep', 'slam', 'shockwave', 'highSweep'],
+    1: ['shockwave', 'slam', 'highSweep', 'lowSweep', 'slam']
+  };
+  return [...(rounds[pip] ?? rounds[1])];
+}
+
+function resolveDodge(dodged: boolean) {
+  if (dodged) {
     const before = boss.meter;
     boss.meter = Math.min(1, boss.meter + METER_PER_DODGE);
     boss.score += 100;
@@ -248,7 +345,11 @@ function resolveHit(attack: BossAttack) {
   } else if (boss.invulnT <= 0) {
     boss.hearts -= 1;
     boss.invulnT = 1.1;
-    sim.shake = 0.8;
+    sim.shake = 0.85;
+    // player kickback
+    sim.laneFromX = sim.laneX;
+    sim.laneT = 0;
+    dashTarget = clamp(sim.laneX + 1.3, STAGE_MIN_X, STAGE_MAX_X);
     boss.events.push({ type: 'playerHit' });
     if (boss.hearts <= 0) {
       setPhase('defeat');
@@ -257,23 +358,30 @@ function resolveHit(attack: BossAttack) {
   }
 }
 
-/** Steps the fight. Returns 'fighting' | 'won' | 'lost' when terminal anims end. */
-export function stepBoss(dt: number): 'fighting' | 'won' | 'lost' {
+/** Steps the fight. Returns 'fighting' | 'won' | 'lost'. */
+export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
   if (!boss.active) return 'fighting';
+
+  // hitstop freezes EVERYTHING except its own timer (Smash hitlag)
+  if (boss.hitstopT > 0) {
+    boss.hitstopT -= rawDt;
+    return 'fighting';
+  }
+  // special-zoom slow-mo eases back to full speed
+  boss.timeScale += (1 - boss.timeScale) * Math.min(1, rawDt * 1.6);
+  const dt = rawDt * boss.timeScale;
+
   boss.time += dt;
   boss.phaseT += dt;
   boss.invulnT = Math.max(0, boss.invulnT - dt);
-  boss.strikeCooldown = Math.max(0, boss.strikeCooldown - dt);
   boss.hitFlash = Math.max(0, boss.hitFlash - dt * 3);
   sim.shake = Math.max(0, sim.shake - dt * 2.2);
 
-  // puppet movement physics (same feel as the runner)
+  // ---- puppet player movement (dash tween + jump physics + duck) ----
   if (sim.laneT < 1) {
     sim.laneT = Math.min(1, sim.laneT + dt / LANE_CHANGE_TIME);
     const ease = 1 - (1 - sim.laneT) * (1 - sim.laneT);
-    sim.laneX = sim.laneFromX + ((LANES[sim.lane] ?? 0) - sim.laneFromX) * ease;
-  } else {
-    sim.laneX = LANES[sim.lane] ?? 0;
+    sim.laneX = sim.laneFromX + (dashTarget - sim.laneFromX) * ease;
   }
   if (!sim.grounded) {
     sim.playerY += sim.verticalVelocity * dt;
@@ -286,71 +394,165 @@ export function stepBoss(dt: number): 'fighting' | 'won' | 'lost' {
   }
   sim.slideTimer = Math.max(0, sim.slideTimer - dt);
 
+  // ---- player attack state machine ----
+  boss.atkBuffer = Math.max(0, boss.atkBuffer - dt);
+  if (boss.atkPhase !== 'idle') {
+    boss.atkT += dt;
+    if (boss.atkPhase === 'startup' && boss.atkT >= ATK_STARTUP) {
+      boss.atkPhase = 'active';
+      boss.atkT = 0;
+      // connect?
+      if (Math.abs(sim.laneX - boss.bossX) < ATK_RANGE && boss.bossY < 1.5) {
+        if (bossVulnerable()) {
+          landHit(boss.atkHeavy ? HEAVY_DMG : LIGHT_DMG);
+        } else {
+          // clank: blocked, player bounced back
+          boss.combo = 0;
+          sim.laneFromX = sim.laneX;
+          sim.laneT = 0;
+          dashTarget = clamp(sim.laneX + 0.8, STAGE_MIN_X, STAGE_MAX_X);
+          boss.events.push({ type: 'clank' });
+        }
+      } else {
+        boss.combo = 0; // whiff drops the combo
+      }
+    } else if (boss.atkPhase === 'active' && boss.atkT >= ATK_ACTIVE) {
+      boss.atkPhase = 'recover';
+      boss.atkT = 0;
+    } else if (boss.atkPhase === 'recover' && boss.atkT >= ATK_RECOVER) {
+      boss.atkPhase = 'idle';
+      boss.atkT = 0;
+      if (boss.atkBuffer > 0 && bossVulnerable()) {
+        boss.atkBuffer = 0;
+        beginAttack();
+      }
+    }
+  }
+
+  // ---- boss knockback physics ----
+  boss.bossX += boss.bossVelX * dt;
+  boss.bossY += boss.bossVelY * dt;
+  if (boss.phase === 'launch' || boss.phase === 'victory') {
+    boss.bossVelY -= 14 * dt; // tumble through the air
+  } else {
+    boss.bossVelX *= Math.pow(0.05, dt);
+    boss.bossVelY -= 30 * dt;
+    if (boss.bossY <= 0) {
+      boss.bossY = 0;
+      boss.bossVelY = 0;
+    }
+    boss.bossX = clamp(boss.bossX, BOSS_MIN_X, BOSS_HOME_X + 1);
+  }
+
+  // ---- fight phases ----
   switch (boss.phase) {
     case 'intro':
       if (boss.phaseT >= INTRO_TIME) {
-        boss.queue = buildRound(boss.hp);
-        setPhase('dodge');
+        boss.queue = roundQueue(boss.hp);
+        setPhase('attack');
         boss.events.push({ type: 'roundStart', pip: boss.hp });
       }
       break;
 
-    case 'dodge': {
+    case 'attack': {
       if (!boss.attack) {
-        const next = boss.queue.shift();
-        if (!next) {
+        const type = boss.queue.shift();
+        if (!type) {
           setPhase('windup');
           break;
         }
-        boss.attack = next;
-        boss.bossLane = next.lane;
+        boss.attack = makeAttack(type);
         break;
       }
-      boss.attack.t += dt;
-      if (!boss.attack.resolved && boss.attack.t >= boss.attack.telegraph) {
-        boss.attack.resolved = true;
-        resolveHit(boss.attack);
-      }
-      if (boss.attack.t >= boss.attack.telegraph + RECOVER_BETWEEN_ATTACKS) {
-        boss.attack = null;
+      const attack = boss.attack;
+      attack.t += dt;
+      const k = attack.t / attack.telegraph;
+
+      if (attack.type === 'lowSweep' || attack.type === 'highSweep') {
+        // pin launches after 55% telegraph and rolls across the stage
+        if (k > 0.55) {
+          attack.prevPinX = attack.pinX;
+          attack.pinX += dt * 16;
+          // crossing the player?
+          if (!attack.resolved && attack.prevPinX < sim.laneX + 0.45 && attack.pinX >= sim.laneX - 0.45) {
+            attack.resolved = true;
+            resolveDodge(attack.type === 'lowSweep' ? sim.playerY > 0.55 : isDucking());
+          }
+        }
+        if (attack.pinX > STAGE_MAX_X + 3) {
+          boss.attack = null;
+          setPhase('recovery');
+        }
+      } else if (attack.type === 'slam') {
+        if (!attack.resolved && k >= 1) {
+          attack.resolved = true;
+          resolveDodge(Math.abs(sim.laneX - attack.zoneX) > 1.7);
+        }
+        if (attack.t >= attack.telegraph + 0.25) {
+          boss.attack = null;
+          setPhase('recovery');
+        }
+      } else {
+        // shockwave ring reaches the player when its radius = distance
+        const radius = Math.max(0, (k - 0.4) * 1.8) * Math.abs(STAGE_MAX_X - BOSS_MIN_X);
+        const dist = Math.abs(sim.laneX - boss.bossX);
+        if (!attack.resolved && radius >= dist) {
+          attack.resolved = true;
+          resolveDodge(sim.playerY > 0.35);
+        }
+        if (attack.t >= attack.telegraph + 0.35) {
+          boss.attack = null;
+          setPhase('recovery');
+        }
       }
       break;
     }
 
+    case 'recovery':
+      if (boss.phaseT >= RECOVERY_TIME) {
+        if (boss.queue.length > 0) setPhase('attack');
+        else setPhase('windup');
+      }
+      break;
+
     case 'windup':
-      // the BIG one: an arena-wide shockwave — jump it to stagger the boss
       if (boss.phaseT >= WINDUP_TIME) {
         const dodged = sim.playerY > 0.35;
         if (dodged) {
           boss.meter = Math.min(1, boss.meter + METER_PER_DODGE);
-          boss.score += 150;
           boss.events.push({ type: 'stagger' });
           setPhase('stagger');
-        } else if (boss.invulnT <= 0) {
-          boss.hearts -= 1;
-          boss.invulnT = 1.1;
-          sim.shake = 0.9;
-          boss.events.push({ type: 'playerHit' });
-          if (boss.hearts <= 0) {
-            setPhase('defeat');
-            boss.events.push({ type: 'defeat' });
-          } else {
-            boss.queue = buildRound(boss.hp);
-            setPhase('dodge');
-          }
         } else {
-          boss.queue = buildRound(boss.hp);
-          setPhase('dodge');
+          resolveDodge(false);
+          if (boss.hearts > 0) {
+            boss.queue = roundQueue(boss.hp);
+            setPhase('attack');
+          }
         }
       }
       break;
 
     case 'stagger':
-      if (boss.phaseT >= STAGGER_TIME) setPhase('strike');
+      if (boss.phaseT >= STAGGER_TIME) {
+        boss.combo = 0;
+        boss.queue = roundQueue(boss.hp);
+        setPhase('attack');
+        boss.events.push({ type: 'roundStart', pip: boss.hp });
+      }
       break;
 
-    case 'strike':
-      if (boss.phaseT >= STRIKE_TIME) endStrike();
+    case 'launch':
+      if (boss.phaseT >= LAUNCH_TIME) {
+        // he storms back, angrier
+        boss.bossX = BOSS_HOME_X;
+        boss.bossY = 0;
+        boss.bossVelX = 0;
+        boss.bossVelY = 0;
+        boss.combo = 0;
+        boss.queue = roundQueue(boss.hp);
+        setPhase('attack');
+        boss.events.push({ type: 'roundStart', pip: boss.hp });
+      }
       break;
 
     case 'victory':
@@ -365,32 +567,34 @@ export function stepBoss(dt: number): 'fighting' | 'won' | 'lost' {
   return 'fighting';
 }
 
-/** HUD prompt for the current moment — tells a kid exactly what to do. */
+/** HUD prompt — tells a kid exactly what to do right now. */
 export function bossPrompt(): string {
   switch (boss.phase) {
     case 'intro':
       return 'THE MEGA MANAGER';
-    case 'dodge': {
+    case 'attack': {
       const attack = boss.attack;
       if (!attack || attack.resolved) return '';
       switch (attack.type) {
         case 'slam':
-          return attack.lane === sim.lane ? 'MOVE!' : '';
+          return Math.abs(sim.laneX - attack.zoneX) <= 1.7 ? 'MOVE AWAY!' : '';
         case 'lowSweep':
-          return 'JUMP!';
+          return 'JUMP THE PIN!';
         case 'highSweep':
-          return 'SLIDE!';
+          return 'DUCK!';
         case 'shockwave':
           return 'JUMP THE WAVE!';
       }
       break;
     }
+    case 'recovery':
+      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER SLAM!' : 'PUNISH! TAP TO ATTACK!';
     case 'windup':
-      return 'DODGE THE BIG ONE — JUMP!';
+      return 'BIG ONE — JUMP!';
     case 'stagger':
-      return 'HE’S DIZZY!';
-    case 'strike':
-      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER SLAM!' : 'GO! SWIPE UP TO HIT!';
+      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER SLAM!' : 'HE’S DIZZY — TAP TAP TAP!';
+    case 'launch':
+      return 'LAUNCHED!';
     case 'victory':
       return 'ORDER UP! YOU WIN!';
     case 'defeat':

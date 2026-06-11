@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { boss } from '../../game/bossSim';
 import { isSliding, sim } from '../../game/engine';
 import { useRunnerStore } from '../../game/runnerStore';
 import type { CharacterDefinition } from '../../game/types';
@@ -90,6 +91,16 @@ export function PlayerBurger({ character }: { character: CharacterDefinition }) 
     root.current.rotation.x += (targetPitch - root.current.rotation.x) * Math.min(1, dt * 9);
     // corner flourish: whip the body toward the turn, easing back as turnLean decays
     root.current.rotation.y = -sim.lastTurnDir * sim.turnLean * 0.6;
+
+    // boss fight: face the boss (-X), punch with the lead arm on attack
+    if (boss.active) {
+      root.current.rotation.y = -Math.PI / 2;
+      root.current.rotation.x = sliding ? 0.5 : -0.05;
+      if (rightArm.current && boss.atkPhase !== 'idle') {
+        rightArm.current.rotation.x = boss.atkPhase === 'recover' ? -1.2 : -2.1;
+        rightArm.current.rotation.z = -0.1;
+      }
+    }
 
     // run cycle
     const speedFactor = running ? sim.worldSpeed : 2.2;
