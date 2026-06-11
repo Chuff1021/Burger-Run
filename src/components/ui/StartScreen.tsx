@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion';
-import { Infinity as InfinityIcon, Map, Settings, ShoppingBag, UserRound } from 'lucide-react';
+import { Infinity as InfinityIcon, Map, Settings, ShoppingBag, Swords, UserRound } from 'lucide-react';
 import { formatMeters, formatNumber } from '../../game/math';
 import { useRunnerStore } from '../../game/runnerStore';
 
 export function StartScreen() {
   const startRun = useRunnerStore((state) => state.startRun);
+  const startBossPractice = useRunnerStore((state) => state.startBossPractice);
   const setActivePanel = useRunnerStore((state) => state.setActivePanel);
   const save = useRunnerStore((state) => state.save);
 
@@ -39,6 +40,10 @@ export function StartScreen() {
         <button className="glass-button full marathon-button" type="button" onClick={() => startRun('marathon')}>
           <InfinityIcon size={20} />
           Marathon (Endless)
+        </button>
+        <button className="glass-button full marathon-button" type="button" onClick={startBossPractice}>
+          <Swords size={20} />
+          Boss Arena
         </button>
         <div className="menu-buttons">
           <button className="glass-button" type="button" onClick={() => setActivePanel('characters')}>

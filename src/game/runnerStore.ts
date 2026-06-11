@@ -35,6 +35,8 @@ interface RunnerStore {
   bossCombo: number;
   bossPromptText: string;
   bossDefeated: boolean;
+  /** how the last boss fight ended (drives the win/lose screen) */
+  bossOutcome: 'won' | 'lost' | null;
   score: number;
   distance: number;
   runCoins: number;
@@ -60,6 +62,8 @@ interface RunnerStore {
   slide: () => void;
   attack: () => void;
   retryBoss: () => void;
+  /** jump straight into the boss arena from the menu — no save writes */
+  startBossPractice: () => void;
   tick: (dt: number) => void;
   setActivePanel: (panel: RunnerStore['activePanel']) => void;
   selectCharacter: (character: CharacterId) => void;
@@ -76,6 +80,8 @@ let lastCheckpointDistance = 0;
 /** coins/score locked in at the last checkpoint — what a respawn resumes with */
 let checkpointCarry = { coins: 0, score: 0 };
 let respawnTimer: number | null = null;
+/** true when the fight was launched from the menu (no campaign rewards) */
+let bossPractice = false;
 
 function sectionStarsEarned(): number {
   const coins = sim.runCoins - sectionCoinBase;
@@ -114,6 +120,7 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
   bossCombo: 0,
   bossPromptText: '',
   bossDefeated: false,
+  bossOutcome: null,
   score: 0,
   distance: 0,
   runCoins: 0,
@@ -129,6 +136,7 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
   toasts: [],
 
   startRun: (mode = get().playMode) => {
+    bossPractice = false;
     if (respawnTimer !== null) {
       window.clearTimeout(respawnTimer);
       respawnTimer = null;
@@ -228,7 +236,13 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
     playCue('start', settings.audio);
     startMusic(settings.audio && settings.music);
     startBoss();
-    set({ status: 'boss', bossHp: 3, bossHearts: 3, bossMeter: 0, bossPercent: 0, bossCombo: 0, bossPromptText: bossPrompt() });
+    set({ status: 'boss', bossHp: 3, bossHearts: 3, bossMeter: 0, bossPercent: 0, bossCombo: 0, bossOutcome: null, bossPromptText: bossPrompt() });
+  },
+
+  startBossPractice: () => {
+    bossPractice = true;
+    get().retryBoss();
+    set({ activePanel: 'none' });
   },
 
   tick: (dt) => {
@@ -287,6 +301,11 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
       if (result === 'won') {
         stopBoss();
         stopMusic();
+        if (bossPractice) {
+          // practice victory: celebrate, never touch the save
+          set({ status: 'bossDefeat', bossOutcome: 'won', toasts: [] });
+          return;
+        }
         const campaign = structuredClone(state.save.campaign);
         campaign.worldCleared[0] = true;
         campaign.unlockedWorld = Math.max(campaign.unlockedWorld, 2);
@@ -304,7 +323,7 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
       if (result === 'lost') {
         stopBoss();
         stopMusic();
-        set({ status: 'bossDefeat', toasts: [] });
+        set({ status: 'bossDefeat', bossOutcome: 'lost', toasts: [] });
         return;
       }
 
