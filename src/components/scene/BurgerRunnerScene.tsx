@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { CHARACTER_ROSTER } from '../../game/constants';
 import { sim } from '../../game/engine';
+import { BossArena } from './BossArena';
 // (corner state is read straight off the sim inside useFrame)
 import { useRunnerStore } from '../../game/runnerStore';
 import { Collectibles } from './Collectibles';
@@ -39,6 +40,20 @@ function CameraRig() {
       if ('fov' in camera) {
         const cam = camera as THREE.PerspectiveCamera;
         cam.fov = THREE.MathUtils.lerp(cam.fov, 58, dt * 2);
+        cam.updateProjectionMatrix();
+      }
+      return;
+    }
+
+    if (status === 'boss' || status === 'bossDefeat') {
+      // arena framing: pulled back and high so player AND boss fill the shot
+      CAMERA_POSITION.set(sim.laneX * 0.35 + shakeX, 4.8 + shakeY, -9.8);
+      camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.001, dt));
+      CAMERA_TARGET.set(sim.laneX * 0.2, 2.2, 8);
+      camera.lookAt(CAMERA_TARGET);
+      if ('fov' in camera) {
+        const cam = camera as THREE.PerspectiveCamera;
+        cam.fov = THREE.MathUtils.lerp(cam.fov, 66, dt * 2);
         cam.updateProjectionMatrix();
       }
       return;
@@ -135,6 +150,7 @@ function KitchenEnvironment() {
 
 export function BurgerRunnerScene() {
   const selectedCharacter = useRunnerStore((state) => state.save.selectedCharacter);
+  const inBossFight = useRunnerStore((state) => state.status === 'boss' || state.status === 'bossDefeat');
   const character = useMemo(
     () => CHARACTER_ROSTER.find((item) => item.id === selectedCharacter) ?? CHARACTER_ROSTER[0],
     [selectedCharacter]
@@ -163,6 +179,7 @@ export function BurgerRunnerScene() {
       <Powerups />
       <Effects />
       <PlayerBurger character={character} />
+      {inBossFight && <BossArena />}
       <PostFX />
     </>
   );

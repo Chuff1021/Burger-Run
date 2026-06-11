@@ -1,6 +1,8 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import { BurgerRunnerScene } from '../components/scene/BurgerRunnerScene';
+import { BossDefeatScreen } from '../components/ui/BossDefeatScreen';
+import { BossHUD } from '../components/ui/BossHUD';
 import { CharacterSelect } from '../components/ui/CharacterSelect';
 import { GameOverScreen } from '../components/ui/GameOverScreen';
 import { HUD } from '../components/ui/HUD';
@@ -35,10 +37,11 @@ export default function GameShell() {
         </Suspense>
       </Canvas>
 
-      <HUD />
+      {status === 'boss' ? <BossHUD /> : <HUD />}
       {status === 'menu' && <StartScreen />}
       {status === 'paused' && <PauseMenu />}
       {status === 'respawn' && <RespawnOverlay />}
+      {status === 'bossDefeat' && <BossDefeatScreen />}
       {status === 'worldComplete' && <WorldCompleteScreen />}
       {status === 'gameOver' && <GameOverScreen />}
       {activePanel === 'characters' && <CharacterSelect />}

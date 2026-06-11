@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { playCue, startMusic, stopMusic } from './audioManager';
+import { boss, bossJump, bossMoveLane, bossPrompt, bossSlide, startBoss, stepBoss, stopBoss } from './bossSim';
 import { CAMPAIGN_LIVES, EMPTY_POWERUPS, GOALS, RESPAWN_DELAY_MS, SECTION_COIN_STAR } from './constants';
 import { jump as engineJump, moveLane as engineMoveLane, resetSim, sim, slide as engineSlide, stepSim, stopSim } from './engine';
 import { triggerHaptic } from './haptics';
@@ -26,6 +27,12 @@ interface RunnerStore {
   sectionStars: number[];
   lastSectionStars: number;
   nextCheckpoint: number;
+  /** boss fight HUD mirror */
+  bossHp: number;
+  bossHearts: number;
+  bossMeter: number;
+  bossPromptText: string;
+  bossDefeated: boolean;
   score: number;
   distance: number;
   runCoins: number;
@@ -49,6 +56,7 @@ interface RunnerStore {
   moveLane: (direction: -1 | 1) => void;
   jump: () => void;
   slide: () => void;
+  retryBoss: () => void;
   tick: (dt: number) => void;
   setActivePanel: (panel: RunnerStore['activePanel']) => void;
   selectCharacter: (character: CharacterId) => void;
@@ -96,6 +104,11 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
   sectionStars: [0, 0, 0],
   lastSectionStars: 0,
   nextCheckpoint: 0,
+  bossHp: 3,
+  bossHearts: 3,
+  bossMeter: 0,
+  bossPromptText: '',
+  bossDefeated: false,
   score: 0,
   distance: 0,
   runCoins: 0,
@@ -129,6 +142,7 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
       playMode: mode,
       lives: CAMPAIGN_LIVES,
       sectionStars: [0, 0, 0],
+      bossDefeated: false,
       activePanel: 'none',
       toasts: [],
       ...hudSnapshot()
@@ -158,17 +172,27 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
       respawnTimer = null;
     }
     stopSim();
+    stopBoss();
     stopMusic();
     set({ status: 'menu', activePanel: 'none' });
   },
 
   moveLane: (direction) => {
-    if (get().status !== 'running') return;
+    const status = get().status;
+    if (status === 'boss') {
+      bossMoveLane(direction);
+      return;
+    }
+    if (status !== 'running') return;
     engineMoveLane(direction);
   },
 
   jump: () => {
     const state = get();
+    if (state.status === 'boss') {
+      bossJump();
+      return;
+    }
     if (state.status !== 'running') return;
     if (engineJump()) {
       playCue('jump', state.save.settings.audio);
@@ -178,6 +202,10 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
 
   slide: () => {
     const state = get();
+    if (state.status === 'boss') {
+      bossSlide();
+      return;
+    }
     if (state.status !== 'running') return;
     if (engineSlide()) {
       playCue('slide', state.save.settings.audio);
@@ -185,8 +213,93 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
     }
   },
 
+  retryBoss: () => {
+    const settings = get().save.settings;
+    playCue('start', settings.audio);
+    startMusic(settings.audio && settings.music);
+    startBoss();
+    set({ status: 'boss', bossHp: 3, bossHearts: 3, bossMeter: 0, bossPromptText: bossPrompt() });
+  },
+
   tick: (dt) => {
     const state = get();
+
+    // ---- boss arena tick ----
+    if (state.status === 'boss') {
+      const settings = state.save.settings;
+      const result = stepBoss(dt);
+
+      for (const event of boss.events) {
+        switch (event.type) {
+          case 'dodge':
+            playCue('nearMiss', settings.audio);
+            break;
+          case 'meterFull':
+            playCue('powerup', settings.audio);
+            triggerHaptic([20, 30, 20], settings.haptics);
+            break;
+          case 'playerHit':
+            playCue('crash', settings.audio);
+            triggerHaptic([40, 60, 40], settings.haptics);
+            break;
+          case 'bossHit':
+            playCue('punch', settings.audio);
+            triggerHaptic(20, settings.haptics);
+            break;
+          case 'superSlam':
+            playCue('bossRoar', settings.audio);
+            triggerHaptic([40, 80, 60], settings.haptics);
+            break;
+          case 'stagger':
+            playCue('shieldBreak', settings.audio);
+            break;
+          case 'roundStart':
+            playCue('bossRoar', settings.audio);
+            break;
+          case 'victory':
+            playCue('goal', settings.audio);
+            triggerHaptic([40, 60, 100], settings.haptics);
+            break;
+          case 'defeat':
+            playCue('crash', settings.audio);
+            break;
+        }
+      }
+      boss.events.length = 0;
+
+      if (result === 'won') {
+        stopBoss();
+        stopMusic();
+        const campaign = structuredClone(state.save.campaign);
+        campaign.worldCleared[0] = true;
+        campaign.unlockedWorld = Math.max(campaign.unlockedWorld, 2);
+        const save: SaveState = {
+          ...state.save,
+          campaign,
+          wallet: state.save.wallet + sim.runCoins + 200,
+          bestScore: Math.max(state.save.bestScore, Math.floor(sim.score + boss.score)),
+          totalRuns: state.save.totalRuns + 1
+        };
+        writeSave(save);
+        set({ status: 'worldComplete', save, bossDefeated: true, toasts: [] });
+        return;
+      }
+      if (result === 'lost') {
+        stopBoss();
+        stopMusic();
+        set({ status: 'bossDefeat', toasts: [] });
+        return;
+      }
+
+      // ~10 Hz HUD mirror
+      hudAccumulator += dt;
+      if (hudAccumulator >= 0.1) {
+        hudAccumulator = 0;
+        set({ bossHp: boss.hp, bossHearts: boss.hearts, bossMeter: boss.meter, bossPromptText: bossPrompt() });
+      }
+      return;
+    }
+
     if (state.status !== 'running') return;
 
     const alive = stepSim(dt);
@@ -229,22 +342,16 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
           break;
         }
         case 'finish': {
+          // course done — persist section stars, then THE BOSS AWAITS
           const stars = sectionStarsEarned();
           const sectionStars = [...get().sectionStars];
           sectionStars[sim.checkpoints.length - 1] = stars;
           const campaign = structuredClone(state.save.campaign);
           campaign.stars[0][sim.checkpoints.length - 1] = Math.max(campaign.stars[0][sim.checkpoints.length - 1], stars);
-          campaign.worldCleared[0] = true;
-          campaignSave = {
-            ...state.save,
-            campaign,
-            wallet: state.save.wallet + sim.runCoins,
-            bestScore: Math.max(state.save.bestScore, Math.floor(sim.score)),
-            totalRuns: state.save.totalRuns + 1
-          };
+          campaignSave = { ...state.save, campaign };
           set({ sectionStars });
           finished = true;
-          playCue('goal', settings.audio);
+          playCue('bossRoar', settings.audio);
           triggerHaptic([30, 40, 60], settings.haptics);
           break;
         }
@@ -271,11 +378,20 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
     }
     sim.events.length = 0;
 
-    // crossed the finish line — world complete celebration
+    // crossed the finish line — into the boss arena
     if (finished && campaignSave) {
-      stopMusic();
       writeSave(campaignSave);
-      set({ status: 'worldComplete', save: campaignSave, toasts: [], ...hudSnapshot() });
+      startBoss();
+      set({
+        status: 'boss',
+        save: campaignSave,
+        toasts: [],
+        bossHp: 3,
+        bossHearts: 3,
+        bossMeter: 0,
+        bossPromptText: bossPrompt(),
+        ...hudSnapshot()
+      });
       return;
     }
     if (campaignSave) {

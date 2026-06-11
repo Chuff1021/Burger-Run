@@ -386,6 +386,119 @@ button:disabled {
   color: #ff8d7a;
 }
 
+/* ---- boss fight HUD ---- */
+
+.boss-hearts {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  display: flex;
+  gap: 8px;
+  color: #ff5a4a;
+  filter: drop-shadow(0 0 10px rgba(255, 59, 42, 0.8));
+}
+
+.boss-bar {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 10px 24px;
+  border: 1px solid rgba(255, 59, 42, 0.6);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 0 26px rgba(255, 59, 42, 0.35);
+}
+
+.boss-bar strong {
+  color: #ff8d7a;
+  font: 400 clamp(0.95rem, 3.2vw, 1.35rem) 'Titan One', sans-serif;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 0 rgba(90, 12, 6, 0.9), 0 0 18px rgba(255, 59, 42, 0.7);
+}
+
+.boss-pips {
+  display: flex;
+  gap: 10px;
+}
+
+.boss-pip {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px rgba(255, 191, 63, 0.8));
+  transition: opacity 0.3s, filter 0.3s;
+}
+
+.boss-pip.empty {
+  opacity: 0.22;
+  filter: grayscale(1);
+}
+
+.smash-meter {
+  position: absolute;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(80vw, 420px);
+  padding: 10px 16px;
+  color: #67ff72;
+  border: 1px solid rgba(103, 255, 114, 0.45);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.smash-meter span {
+  font: 700 0.8rem Rajdhani, sans-serif;
+  letter-spacing: 0.22em;
+}
+
+.smash-track {
+  flex: 1;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(103, 255, 114, 0.12);
+  overflow: hidden;
+}
+
+.smash-track i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #2dd348, #67ff72);
+  box-shadow: 0 0 14px rgba(103, 255, 114, 0.8);
+  transition: width 0.15s;
+}
+
+.smash-meter.ready {
+  box-shadow: 0 0 28px rgba(103, 255, 114, 0.55);
+  animation: turn-pulse 0.5s ease-in-out infinite;
+}
+
+.boss-prompt {
+  position: absolute;
+  top: 22vh;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 26px;
+  color: var(--gold);
+  border: 2px solid rgba(255, 191, 63, 0.7);
+  border-radius: 14px;
+  background: rgba(10, 8, 4, 0.74);
+  box-shadow: 0 0 30px rgba(255, 191, 63, 0.45);
+  font: 400 clamp(1.3rem, 5vw, 2.2rem) 'Titan One', sans-serif;
+  text-align: center;
+  text-shadow: 0 3px 0 rgba(122, 53, 8, 0.9), 0 0 24px rgba(255, 191, 63, 0.7);
+  white-space: nowrap;
+}
+
+.boss-prompt.urgent {
+  animation: turn-pulse 0.4s ease-in-out infinite;
+}
+
 /* ---- turn banner ---- */
 
 .turn-banner {

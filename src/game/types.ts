@@ -1,4 +1,4 @@
-export type GameStatus = 'menu' | 'running' | 'paused' | 'respawn' | 'worldComplete' | 'gameOver';
+export type GameStatus = 'menu' | 'running' | 'paused' | 'respawn' | 'boss' | 'bossDefeat' | 'worldComplete' | 'gameOver';
 
 export type PlayMode = 'marathon' | 'campaign';
 

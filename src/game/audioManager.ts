@@ -11,6 +11,8 @@ export type SoundCue =
   | 'jump'
   | 'slide'
   | 'turn'
+  | 'punch'
+  | 'bossRoar'
   | 'start'
   | 'goal'
   | 'shieldBreak'
@@ -115,6 +117,16 @@ export function playCue(cue: SoundCue, enabled: boolean) {
       noiseBurst(now, 0.32, 0.08);
       tone(340, now, 0.26, { type: 'sine', gain: 0.05, slideTo: 760 });
       tone(510, now + 0.08, 0.2, { type: 'triangle', gain: 0.04, slideTo: 980 });
+      break;
+    case 'punch':
+      // meaty thwack
+      noiseBurst(now, 0.16, 0.14);
+      tone(180, now, 0.14, { type: 'square', gain: 0.08, slideTo: 70 });
+      break;
+    case 'bossRoar':
+      tone(95, now, 0.55, { type: 'sawtooth', gain: 0.09, slideTo: 55 });
+      tone(140, now + 0.08, 0.45, { type: 'square', gain: 0.05, slideTo: 70 });
+      noiseBurst(now + 0.05, 0.4, 0.07);
       break;
     case 'crash':
       noiseBurst(now, 0.5, 0.2);

@@ -12,6 +12,7 @@ export function WorldCompleteScreen() {
   const score = useRunnerStore((state) => state.score);
   const runCoins = useRunnerStore((state) => state.runCoins);
   const sectionStars = useRunnerStore((state) => state.sectionStars);
+  const bossDefeated = useRunnerStore((state) => state.bossDefeated);
   const world = WORLDS[0];
 
   return (
@@ -54,7 +55,15 @@ export function WorldCompleteScreen() {
         </div>
         <div className="reward-banner boss-tease">
           <span>
-            <b>THE MEGA MANAGER</b> is waiting at the end of this world… boss fights arrive in the next update!
+            {bossDefeated ? (
+              <>
+                <b>THE MEGA MANAGER IS FIRED!</b> +200 bonus coins. Freezer Frontier opens in the next update…
+              </>
+            ) : (
+              <>
+                <b>THE MEGA MANAGER</b> is waiting at the end of this world…
+              </>
+            )}
           </span>
         </div>
         <button className="primary-button" type="button" onClick={() => startRun('campaign')}>
