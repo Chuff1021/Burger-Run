@@ -28,6 +28,9 @@ interface RunnerStore {
   goalsHit: number;
   /** mirrors sim.poolVersion so entity lists know when to resync */
   poolVersion: number;
+  /** upcoming corner readout for the HUD turn banner (0 = none) */
+  cornerDir: -1 | 0 | 1;
+  cornerDist: number;
   powerups: PowerupTimers;
   save: SaveState;
   activePanel: 'none' | 'characters' | 'shop' | 'settings';
@@ -50,7 +53,11 @@ let hudAccumulator = 0;
 let toastId = 0;
 
 function hudSnapshot() {
+  const corner = sim.corners[0];
+  const cornerPending = corner && !corner.consumed && corner.z > 0;
   return {
+    cornerDir: (cornerPending ? corner.dir : 0) as -1 | 0 | 1,
+    cornerDist: cornerPending ? Math.max(0, Math.round(corner.z)) : 999,
     score: sim.score,
     distance: sim.distance,
     runCoins: sim.runCoins,
@@ -71,6 +78,8 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
   nextGoal: GOALS[0],
   goalsHit: 0,
   poolVersion: 0,
+  cornerDir: 0,
+  cornerDist: 999,
   powerups: { ...EMPTY_POWERUPS },
   save: loadSave(),
   activePanel: 'none',

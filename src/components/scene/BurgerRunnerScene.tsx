@@ -49,7 +49,7 @@ function CameraRig() {
       yawOffset.current += sim.cameraYawKick;
       sim.cameraYawKick = 0;
     }
-    yawOffset.current *= Math.pow(0.03, dt); // ~0.4s sweep through the corner
+    yawOffset.current *= Math.pow(0.045, dt); // ~0.5s sweep through the corner
     // pre-lean into an approaching corner so the player sees down the new leg
     let lean = 0;
     const corner = sim.corners[0];
@@ -67,6 +67,8 @@ function CameraRig() {
     camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.0003, dt));
     CAMERA_TARGET.set(sim.laneX * 0.36, 1.5 + sim.playerY * 0.25, 9).applyAxisAngle(Y_AXIS, yaw);
     camera.lookAt(CAMERA_TARGET);
+    // bank into the sweep for that carving-the-corner feel
+    camera.rotateZ(THREE.MathUtils.clamp(-yawOffset.current * 0.1, -0.12, 0.12));
     if ('fov' in camera) {
       const cam = camera as THREE.PerspectiveCamera;
       const boostKick = sim.powerups.speedBoost > 0 ? 8 : 0;

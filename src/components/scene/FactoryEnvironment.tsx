@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { bendPoint, sim, type BendOut } from '../../game/engine';
-import { arrowSignTexture, glowStreakTexture, neonSignTexture } from './textures';
+import { arrowSignTexture, cautionStripeTexture, glowStreakTexture, neonSignTexture } from './textures';
 
 const MODELS = {
   burger: '/models/burger-cheese.glb',
@@ -500,6 +500,13 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
   const arrowTex = useMemo(() => arrowSignTexture(dir), [dir]);
   const halo = useMemo(() => glowStreakTexture(), []);
 
+  const caution = useMemo(() => {
+    const tex = cautionStripeTexture().clone();
+    tex.needsUpdate = true;
+    tex.repeat.set(8, 1);
+    return tex;
+  }, []);
+
   const mats = useMemo(
     () => ({
       wall: new THREE.MeshStandardMaterial({ color: '#151a24', metalness: 0.7, roughness: 0.4 }),
@@ -507,6 +514,14 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
       trim: new THREE.MeshStandardMaterial({ color: '#ffbf3f', emissive: '#ff9a1f', emissiveIntensity: 2.4 }),
       warn: new THREE.MeshStandardMaterial({ color: '#ff3b2a', emissive: '#ff2212', emissiveIntensity: 2.2 }),
       arrow: new THREE.MeshBasicMaterial({ map: arrowTex, toneMapped: false }),
+      floorArrow: new THREE.MeshBasicMaterial({
+        map: arrowTex,
+        transparent: true,
+        opacity: 0.85,
+        toneMapped: false,
+        depthWrite: false
+      }),
+      cautionBand: new THREE.MeshStandardMaterial({ map: caution, emissive: '#7a5a08', emissiveIntensity: 0.5 }),
       haloMat: new THREE.MeshBasicMaterial({
         map: halo,
         color: '#ffc41f',
@@ -517,7 +532,7 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
         side: THREE.DoubleSide
       })
     }),
-    [arrowTex, halo]
+    [arrowTex, halo, caution]
   );
 
   return (
@@ -526,6 +541,18 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
       <mesh material={mats.platform} position={[-s * 3, -0.06, 3.5]}>
         <boxGeometry args={[20, 0.2, 14]} />
       </mesh>
+      {/* glowing chevrons painted on the floor, leading through the turn */}
+      {[0.5, 3.2, 5.9].map((z, i) => (
+        <mesh
+          key={z}
+          material={mats.floorArrow}
+          position={[-s * (1.2 + i * 1.6), 0.055, z]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          userData={{ pulse: i }}
+        >
+          <planeGeometry args={[3.4, 1.7]} />
+        </mesh>
+      ))}
       {/* platform edge glow strips */}
       <mesh material={mats.trim} position={[-s * 3, 0.06, -3.4]}>
         <boxGeometry args={[19, 0.05, 0.12]} />
@@ -534,11 +561,15 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
       <mesh material={mats.wall} position={[-s * 1, 5.5, 9]}>
         <boxGeometry args={[22, 11.5, 0.9]} />
       </mesh>
-      {/* big glowing arrow sign */}
-      <mesh material={mats.arrow} position={[-s * 1, 3.6, 8.5]} rotation={[0, Math.PI, 0]}>
-        <planeGeometry args={[6.4, 3.2]} />
+      {/* caution-striped base of the back wall */}
+      <mesh material={mats.cautionBand} position={[-s * 1, 1.1, 8.5]}>
+        <boxGeometry args={[20, 1.1, 0.1]} />
       </mesh>
-      <mesh material={mats.haloMat} position={[-s * 1, 3.6, 8.4]} rotation={[0, Math.PI, 0]} scale={[10, 5.5, 1]}>
+      {/* big glowing arrow sign (pulses) */}
+      <mesh material={mats.arrow} position={[-s * 1, 4.2, 8.45]} rotation={[0, Math.PI, 0]} userData={{ pulse: 0 }}>
+        <planeGeometry args={[7.6, 3.8]} />
+      </mesh>
+      <mesh material={mats.haloMat} position={[-s * 1, 4.2, 8.35]} rotation={[0, Math.PI, 0]} scale={[12, 6.5, 1]}>
         <planeGeometry args={[1, 1]} />
       </mesh>
       {/* red hazard strip along the bottom of the back wall */}
@@ -549,9 +580,9 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
       <mesh material={mats.wall} position={[s * 8.5, 5.5, 2]}>
         <boxGeometry args={[0.9, 11.5, 14]} />
       </mesh>
-      {/* small arrow on the side wall too, for peripheral vision */}
-      <mesh material={mats.arrow} position={[s * 8, 3.2, 1]} rotation={[0, -s * (Math.PI / 2), 0]}>
-        <planeGeometry args={[4.2, 2.1]} />
+      {/* side-wall arrow for peripheral vision (pulses) */}
+      <mesh material={mats.arrow} position={[s * 8, 3.4, 1]} rotation={[0, -s * (Math.PI / 2), 0]} userData={{ pulse: 1 }}>
+        <planeGeometry args={[5, 2.5]} />
       </mesh>
       {/* ceiling patch */}
       <mesh material={mats.wall} position={[-s * 2, 10.8, 3.5]}>
@@ -564,8 +595,9 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
 function CornerRoom() {
   const rightRef = useRef<THREE.Group>(null);
   const leftRef = useRef<THREE.Group>(null);
+  const pulseTargets = useRef<THREE.Object3D[]>([]);
 
-  useFrame(() => {
+  useFrame((state) => {
     const corner = sim.corners[0];
     const right = rightRef.current;
     const left = leftRef.current;
@@ -580,6 +612,18 @@ function CornerRoom() {
     idle.visible = false;
     active.visible = true;
     active.position.set(0, 0, corner.z);
+
+    // pulse every arrow — urgency ramps as the corner gets close
+    pulseTargets.current.length = 0;
+    active.traverse((obj) => {
+      if ((obj.userData as { pulse?: number }).pulse !== undefined) pulseTargets.current.push(obj);
+    });
+    const urgency = corner.z < 18 ? 9 : 5;
+    const t = state.clock.elapsedTime;
+    for (const obj of pulseTargets.current) {
+      const phase = (obj.userData as { pulse: number }).pulse * 0.9;
+      obj.scale.setScalar(1 + Math.sin(t * urgency + phase) * 0.07);
+    }
   });
 
   return (

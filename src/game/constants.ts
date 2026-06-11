@@ -54,9 +54,9 @@ export const NEAR_MISS_BONUS = 150;
 export const CORNER_FIRST_AT = 180;
 export const CORNER_MIN_GAP = 140;
 export const CORNER_MAX_GAP = 260;
-/** swipe accepted while corner is between these z bounds */
-export const TURN_WINDOW_AHEAD = 9;
-export const TURN_FAIL_Z = -0.55;
+/** swipe accepted while corner is between these z bounds (generous, kid-friendly) */
+export const TURN_WINDOW_AHEAD = 13;
+export const TURN_FAIL_Z = -1.3;
 export const TURN_BONUS = 100;
 /** clear runway reserved around a corner (no obstacles/coins) */
 export const CORNER_CLEAR_BEFORE = 8;

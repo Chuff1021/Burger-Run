@@ -85,6 +85,9 @@ export interface Sim {
   nextCornerDistance: number;
   /** one-shot camera yaw compensation applied when a corner is crossed */
   cameraYawKick: number;
+  /** character turn flourish: direction of the last turn + 1→0 decay */
+  lastTurnDir: -1 | 1;
+  turnLean: number;
   nextSpawnZ: number;
   nextGoalIndex: number;
   /** bumped whenever entities spawn/despawn so React lists can resync cheaply */
@@ -154,6 +157,8 @@ export const sim: Sim = {
   corners: [],
   nextCornerDistance: CORNER_FIRST_AT,
   cameraYawKick: 0,
+  lastTurnDir: 1,
+  turnLean: 0,
   nextSpawnZ: 0,
   nextGoalIndex: 0,
   poolVersion: 0,
@@ -194,6 +199,8 @@ export function resetSim() {
   sim.corners.length = 0;
   sim.nextCornerDistance = CORNER_FIRST_AT + Math.random() * 60;
   sim.cameraYawKick = 0;
+  sim.lastTurnDir = 1;
+  sim.turnLean = 0;
   sim.nextGoalIndex = 0;
   sim.events.length = 0;
 
@@ -271,6 +278,8 @@ export function moveLane(direction: -1 | 1) {
     if (direction === corner.dir) {
       corner.consumed = true;
       sim.score += TURN_BONUS;
+      sim.lastTurnDir = direction;
+      sim.turnLean = 1;
       sim.events.push({ type: 'turn', dir: direction });
       return;
     }
@@ -379,6 +388,7 @@ export function stepSim(dt: number): boolean {
   }
   sim.slideTimer = Math.max(0, sim.slideTimer - dt);
   sim.shake = Math.max(0, sim.shake - dt * 2.2);
+  sim.turnLean = Math.max(0, sim.turnLean - dt * 1.6);
 
   // corners scroll with the world
   for (const corner of sim.corners) corner.z -= deltaZ;

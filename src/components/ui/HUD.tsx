@@ -1,4 +1,4 @@
-import { Magnet, Pause, Shield, Star, Zap } from 'lucide-react';
+import { ArrowBigLeft, ArrowBigRight, Magnet, Pause, Shield, Star, Zap } from 'lucide-react';
 import { POWERUP_DURATION } from '../../game/constants';
 import { formatMeters, formatNumber } from '../../game/math';
 import { useRunnerStore } from '../../game/runnerStore';
@@ -28,6 +28,8 @@ export function HUD() {
   const goalsHit = useRunnerStore((state) => state.goalsHit);
   const powerups = useRunnerStore((state) => state.powerups);
   const toasts = useRunnerStore((state) => state.toasts);
+  const cornerDir = useRunnerStore((state) => state.cornerDir);
+  const cornerDist = useRunnerStore((state) => state.cornerDist);
   const pause = useRunnerStore((state) => state.pause);
 
   if (status === 'menu') return null;
@@ -71,6 +73,15 @@ export function HUD() {
           ))}
         </div>
       </article>
+
+      {/* ---- turn warning banner ---- */}
+      {cornerDir !== 0 && cornerDist < 32 && status === 'running' && (
+        <div className={`turn-banner ${cornerDist < 14 ? 'urgent' : ''}`} aria-live="assertive">
+          {cornerDir === -1 && <ArrowBigLeft size={44} fill="currentColor" />}
+          <span>TURN!</span>
+          {cornerDir === 1 && <ArrowBigRight size={44} fill="currentColor" />}
+        </div>
+      )}
 
       {/* ---- center toasts ---- */}
       <div className="toast-stack" aria-live="polite">

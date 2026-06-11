@@ -88,6 +88,8 @@ export function PlayerBurger({ character }: { character: CharacterDefinition }) 
     root.current.rotation.z += (targetRoll - root.current.rotation.z) * Math.min(1, dt * 10);
     const targetPitch = sliding ? 0.85 : sim.grounded ? 0.1 + sim.worldSpeed * 0.004 : -0.18;
     root.current.rotation.x += (targetPitch - root.current.rotation.x) * Math.min(1, dt * 9);
+    // corner flourish: whip the body toward the turn, easing back as turnLean decays
+    root.current.rotation.y = -sim.lastTurnDir * sim.turnLean * 0.6;
 
     // run cycle
     const speedFactor = running ? sim.worldSpeed : 2.2;
