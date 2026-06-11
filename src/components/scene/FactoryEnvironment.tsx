@@ -2,8 +2,8 @@ import { Clone, Text, useGLTF, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { sim } from '../../game/engine';
-import { glowStreakTexture, neonSignTexture } from './textures';
+import { bendPoint, sim, type BendOut } from '../../game/engine';
+import { arrowSignTexture, glowStreakTexture, neonSignTexture } from './textures';
 
 const MODELS = {
   burger: '/models/burger-cheese.glb',
@@ -428,7 +428,17 @@ const WINDOWS_PER_SIDE = 24;
 function WallLights() {
   const cyanRef = useRef<THREE.InstancedMesh>(null);
   const amberRef = useRef<THREE.InstancedMesh>(null);
-  const tmp = useMemo(() => ({ m: new THREE.Matrix4(), p: new THREE.Vector3(), q: new THREE.Quaternion(), e: new THREE.Euler(), s: new THREE.Vector3(1, 1, 1) }), []);
+  const tmp = useMemo(
+    () => ({
+      m: new THREE.Matrix4(),
+      p: new THREE.Vector3(),
+      q: new THREE.Quaternion(),
+      e: new THREE.Euler(),
+      s: new THREE.Vector3(1, 1, 1),
+      bend: { x: 0, z: 0, yaw: 0 } as BendOut
+    }),
+    []
+  );
 
   const slots = useMemo(() => {
     const list: { x: number; y: number; z: number; cyan: boolean }[] = [];
@@ -453,8 +463,9 @@ function WallLights() {
     let ai = 0;
     for (const slot of slots) {
       const z = ((slot.z - sim.distance) % SPAN + SPAN) % SPAN - BEHIND;
-      tmp.p.set(slot.x, slot.y, z);
-      tmp.e.set(0, slot.x < 0 ? Math.PI / 2 : -Math.PI / 2, 0);
+      bendPoint(slot.x, z, tmp.bend);
+      tmp.p.set(tmp.bend.x, slot.y, tmp.bend.z);
+      tmp.e.set(0, (slot.x < 0 ? Math.PI / 2 : -Math.PI / 2) + tmp.bend.yaw, 0);
       tmp.q.setFromEuler(tmp.e);
       tmp.m.compose(tmp.p, tmp.q, tmp.s);
       if (slot.cyan) cyan.setMatrixAt(ci++, tmp.m);
@@ -468,14 +479,117 @@ function WallLights() {
 
   return (
     <group>
+      {/* dimmed so gameplay elements (red hazards, gold coins) own the contrast */}
       <instancedMesh ref={cyanRef} args={[undefined, undefined, WINDOWS_PER_SIDE * 2]} frustumCulled={false}>
         <planeGeometry args={[1.8, 1.0]} />
-        <meshStandardMaterial color="#0a2530" emissive="#1fb9de" emissiveIntensity={1.1} />
+        <meshStandardMaterial color="#0a2530" emissive="#1fb9de" emissiveIntensity={0.55} />
       </instancedMesh>
       <instancedMesh ref={amberRef} args={[undefined, undefined, WINDOWS_PER_SIDE * 2]} frustumCulled={false}>
         <planeGeometry args={[1.8, 1.0]} />
-        <meshStandardMaterial color="#2b1d08" emissive="#ff9a1f" emissiveIntensity={1.0} />
+        <meshStandardMaterial color="#2b1d08" emissive="#ff9a1f" emissiveIntensity={0.5} />
       </instancedMesh>
+    </group>
+  );
+}
+
+/* --------------------------- corner room --------------------------- */
+
+function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
+  // dir +1 = right turn → exit toward -X (screen right); mirror for left
+  const s = dir; // sign shorthand: non-exit side is +X for right turns
+  const arrowTex = useMemo(() => arrowSignTexture(dir), [dir]);
+  const halo = useMemo(() => glowStreakTexture(), []);
+
+  const mats = useMemo(
+    () => ({
+      wall: new THREE.MeshStandardMaterial({ color: '#151a24', metalness: 0.7, roughness: 0.4 }),
+      platform: new THREE.MeshStandardMaterial({ color: '#262d3a', metalness: 0.7, roughness: 0.35 }),
+      trim: new THREE.MeshStandardMaterial({ color: '#ffbf3f', emissive: '#ff9a1f', emissiveIntensity: 2.4 }),
+      warn: new THREE.MeshStandardMaterial({ color: '#ff3b2a', emissive: '#ff2212', emissiveIntensity: 2.2 }),
+      arrow: new THREE.MeshBasicMaterial({ map: arrowTex, toneMapped: false }),
+      haloMat: new THREE.MeshBasicMaterial({
+        map: halo,
+        color: '#ffc41f',
+        transparent: true,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
+    }),
+    [arrowTex, halo]
+  );
+
+  return (
+    <group>
+      {/* elbow platform bridging old and new leg decks */}
+      <mesh material={mats.platform} position={[-s * 3, -0.06, 3.5]}>
+        <boxGeometry args={[20, 0.2, 14]} />
+      </mesh>
+      {/* platform edge glow strips */}
+      <mesh material={mats.trim} position={[-s * 3, 0.06, -3.4]}>
+        <boxGeometry args={[19, 0.05, 0.12]} />
+      </mesh>
+      {/* back wall facing the player, with arrows */}
+      <mesh material={mats.wall} position={[-s * 1, 5.5, 9]}>
+        <boxGeometry args={[22, 11.5, 0.9]} />
+      </mesh>
+      {/* big glowing arrow sign */}
+      <mesh material={mats.arrow} position={[-s * 1, 3.6, 8.5]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[6.4, 3.2]} />
+      </mesh>
+      <mesh material={mats.haloMat} position={[-s * 1, 3.6, 8.4]} rotation={[0, Math.PI, 0]} scale={[10, 5.5, 1]}>
+        <planeGeometry args={[1, 1]} />
+      </mesh>
+      {/* red hazard strip along the bottom of the back wall */}
+      <mesh material={mats.warn} position={[-s * 1, 0.45, 8.45]}>
+        <boxGeometry args={[20, 0.14, 0.05]} />
+      </mesh>
+      {/* wall sealing the non-exit side */}
+      <mesh material={mats.wall} position={[s * 8.5, 5.5, 2]}>
+        <boxGeometry args={[0.9, 11.5, 14]} />
+      </mesh>
+      {/* small arrow on the side wall too, for peripheral vision */}
+      <mesh material={mats.arrow} position={[s * 8, 3.2, 1]} rotation={[0, -s * (Math.PI / 2), 0]}>
+        <planeGeometry args={[4.2, 2.1]} />
+      </mesh>
+      {/* ceiling patch */}
+      <mesh material={mats.wall} position={[-s * 2, 10.8, 3.5]}>
+        <boxGeometry args={[20, 0.6, 14]} />
+      </mesh>
+    </group>
+  );
+}
+
+function CornerRoom() {
+  const rightRef = useRef<THREE.Group>(null);
+  const leftRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    const corner = sim.corners[0];
+    const right = rightRef.current;
+    const left = leftRef.current;
+    if (!right || !left) return;
+    if (!corner) {
+      right.visible = false;
+      left.visible = false;
+      return;
+    }
+    const active = corner.dir === 1 ? right : left;
+    const idle = corner.dir === 1 ? left : right;
+    idle.visible = false;
+    active.visible = true;
+    active.position.set(0, 0, corner.z);
+  });
+
+  return (
+    <group>
+      <group ref={rightRef} visible={false}>
+        <CornerRoomVariant dir={1} />
+      </group>
+      <group ref={leftRef} visible={false}>
+        <CornerRoomVariant dir={-1} />
+      </group>
     </group>
   );
 }
@@ -491,12 +605,24 @@ export function FactoryEnvironment() {
     if (mesh && !flames.current.includes(mesh)) flames.current.push(mesh);
   };
 
+  const bendScratch = useRef<BendOut>({ x: 0, z: 0, yaw: 0 });
+
   useFrame((state) => {
+    const corner = sim.corners[0];
     for (let i = 0; i < MODULE_COUNT; i += 1) {
       const group = moduleRefs.current[i];
       if (!group) continue;
       const raw = i * MODULE_LENGTH - sim.distance;
-      group.position.z = ((raw % SPAN) + SPAN) % SPAN - BEHIND;
+      const z = ((raw % SPAN) + SPAN) % SPAN - BEHIND;
+      // a rigid module can't straddle a 90° bend — hide it; the corner room fills the gap
+      if (corner && z < corner.z + 4 && z + MODULE_LENGTH > corner.z - 10) {
+        group.visible = false;
+        continue;
+      }
+      group.visible = true;
+      const bend = bendPoint(0, z, bendScratch.current);
+      group.position.set(bend.x, 0, bend.z);
+      group.rotation.y = bend.yaw;
     }
     const t = state.clock.elapsedTime;
     for (let i = 0; i < flames.current.length; i += 1) {
@@ -514,6 +640,7 @@ export function FactoryEnvironment() {
         </group>
       ))}
       <WallLights />
+      <CornerRoom />
     </group>
   );
 }

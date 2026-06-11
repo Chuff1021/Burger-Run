@@ -2,6 +2,11 @@ import {
   BOOST_MULTIPLIER,
   COIN_COLLECT_RADIUS,
   COIN_POOL_SIZE,
+  CORNER_CLEAR_AFTER,
+  CORNER_CLEAR_BEFORE,
+  CORNER_FIRST_AT,
+  CORNER_MAX_GAP,
+  CORNER_MIN_GAP,
   DESPAWN_Z,
   EMPTY_POWERUPS,
   FALL_GRAVITY_MULT,
@@ -26,12 +31,16 @@ import {
   SLIDE_DURATION,
   SPAWN_AHEAD_Z,
   SPEED_RAMP,
-  START_SPEED
+  START_SPEED,
+  TURN_BONUS,
+  TURN_FAIL_Z,
+  TURN_WINDOW_AHEAD
 } from './constants';
 import { clamp } from './math';
 import { spawnChunk } from './patterns';
 import type {
   CoinEntity,
+  CornerEntity,
   EngineEvent,
   ObstacleEntity,
   PowerupEntity,
@@ -70,6 +79,12 @@ export interface Sim {
   obstacles: ObstacleEntity[];
   coins: CoinEntity[];
   pickups: PowerupEntity[];
+  /** upcoming 90° corners, nearest first (at most one inside the horizon) */
+  corners: CornerEntity[];
+  /** absolute distance at which the next corner spawns */
+  nextCornerDistance: number;
+  /** one-shot camera yaw compensation applied when a corner is crossed */
+  cameraYawKick: number;
   nextSpawnZ: number;
   nextGoalIndex: number;
   /** bumped whenever entities spawn/despawn so React lists can resync cheaply */
@@ -136,6 +151,9 @@ export const sim: Sim = {
   obstacles: createObstaclePool(),
   coins: createCoinPool(),
   pickups: createPowerupPool(),
+  corners: [],
+  nextCornerDistance: CORNER_FIRST_AT,
+  cameraYawKick: 0,
   nextSpawnZ: 0,
   nextGoalIndex: 0,
   poolVersion: 0,
@@ -173,21 +191,71 @@ export function resetSim() {
   for (const o of sim.obstacles) o.active = false;
   for (const c of sim.coins) c.active = false;
   for (const p of sim.pickups) p.active = false;
+  sim.corners.length = 0;
+  sim.nextCornerDistance = CORNER_FIRST_AT + Math.random() * 60;
+  sim.cameraYawKick = 0;
   sim.nextGoalIndex = 0;
   sim.events.length = 0;
 
   // pre-fill the runway, keeping the first 20m clear
   sim.nextSpawnZ = 20;
   while (sim.nextSpawnZ < SPAWN_AHEAD_Z) {
-    sim.nextSpawnZ += spawnChunk({
-      z: sim.nextSpawnZ,
-      distance: 0,
-      obstacles: sim.obstacles,
-      coins: sim.coins,
-      powerups: sim.pickups
-    });
+    spawnAhead(0);
   }
   sim.poolVersion += 1;
+}
+
+/** Advance the spawn cursor by one chunk — or by a corner when one is due. */
+function spawnAhead(distance: number) {
+  const cursorDistance = distance + sim.nextSpawnZ;
+  if (cursorDistance >= sim.nextCornerDistance) {
+    sim.corners.push({
+      z: sim.nextSpawnZ + CORNER_CLEAR_BEFORE,
+      dir: Math.random() > 0.5 ? 1 : -1,
+      consumed: false
+    });
+    sim.nextSpawnZ += CORNER_CLEAR_BEFORE + CORNER_CLEAR_AFTER;
+    sim.nextCornerDistance += CORNER_MIN_GAP + Math.random() * (CORNER_MAX_GAP - CORNER_MIN_GAP);
+    return;
+  }
+  sim.nextSpawnZ += spawnChunk({
+    z: sim.nextSpawnZ,
+    distance,
+    obstacles: sim.obstacles,
+    coins: sim.coins,
+    powerups: sim.pickups
+  });
+}
+
+export interface BendOut {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+/**
+ * Maps a track-space point (lateral x, forward z) into world space through
+ * the nearest upcoming corner. Points beyond the corner are rotated 90°
+ * around the corner pivot, which is what makes the corridor visibly turn.
+ * When the player crosses a consumed corner it is dropped and the camera
+ * gets an equal-and-opposite yaw kick — mathematically seamless.
+ */
+export function bendPoint(x: number, z: number, out: BendOut): BendOut {
+  const corner = sim.corners[0];
+  if (!corner || z <= corner.z) {
+    out.x = x;
+    out.z = z;
+    out.yaw = 0;
+    return out;
+  }
+  const d = z - corner.z;
+  const theta = -corner.dir * (Math.PI / 2); // dir +1 = right turn = toward -X (screen right)
+  const sin = Math.sin(theta);
+  const cos = Math.cos(theta);
+  out.x = x * cos + d * sin;
+  out.z = corner.z + (d * cos - x * sin);
+  out.yaw = theta;
+  return out;
 }
 
 export function stopSim() {
@@ -196,6 +264,18 @@ export function stopSim() {
 
 export function moveLane(direction: -1 | 1) {
   if (!sim.running) return;
+
+  // corner takes priority: a swipe toward the turn inside the window TURNS
+  const corner = sim.corners[0];
+  if (corner && !corner.consumed && corner.z < TURN_WINDOW_AHEAD && corner.z > TURN_FAIL_Z) {
+    if (direction === corner.dir) {
+      corner.consumed = true;
+      sim.score += TURN_BONUS;
+      sim.events.push({ type: 'turn', dir: direction });
+      return;
+    }
+  }
+
   const next = clamp(sim.lane + direction, 0, 2);
   if (next === sim.lane) return;
   // start a fresh fixed-duration tween from wherever we are right now —
@@ -300,6 +380,24 @@ export function stepSim(dt: number): boolean {
   sim.slideTimer = Math.max(0, sim.slideTimer - dt);
   sim.shake = Math.max(0, sim.shake - dt * 2.2);
 
+  // corners scroll with the world
+  for (const corner of sim.corners) corner.z -= deltaZ;
+  const corner = sim.corners[0];
+  if (corner) {
+    if (!corner.consumed && corner.z < TURN_FAIL_Z) {
+      // ran straight into the corner wall
+      sim.shake = 1;
+      sim.running = false;
+      sim.events.push({ type: 'crash' });
+      return false;
+    }
+    if (corner.consumed && corner.z <= 0) {
+      // crossing the pivot: drop the bend and hand the camera its yaw kick
+      sim.corners.shift();
+      sim.cameraYawKick += corner.dir * (Math.PI / 2);
+    }
+  }
+
   // move world
   let despawned = false;
   for (const o of sim.obstacles) {
@@ -387,13 +485,7 @@ export function stepSim(dt: number): boolean {
   sim.nextSpawnZ -= deltaZ;
   let spawned = false;
   while (sim.nextSpawnZ < SPAWN_AHEAD_Z) {
-    sim.nextSpawnZ += spawnChunk({
-      z: sim.nextSpawnZ,
-      distance: sim.distance,
-      obstacles: sim.obstacles,
-      coins: sim.coins,
-      powerups: sim.pickups
-    });
+    spawnAhead(sim.distance);
     spawned = true;
   }
   if (despawned || spawned) sim.poolVersion += 1;

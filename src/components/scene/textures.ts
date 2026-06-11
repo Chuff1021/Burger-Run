@@ -224,6 +224,53 @@ export function coinFaceTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/** Big glowing chevron arrows for corner walls — unmistakable turn signage. */
+export function arrowSignTexture(dir: -1 | 1): THREE.CanvasTexture {
+  const key = `arrow:${dir}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const { canvas, ctx } = makeCanvas(512, 256);
+  const bg = ctx.createLinearGradient(0, 0, 0, 256);
+  bg.addColorStop(0, '#1c1208');
+  bg.addColorStop(1, '#0e0905');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 512, 256);
+  ctx.strokeStyle = '#ffc41f';
+  ctx.lineWidth = 6;
+  ctx.shadowColor = '#ff9a1f';
+  ctx.shadowBlur = 18;
+  ctx.strokeRect(12, 12, 488, 232);
+  // three chevrons pointing in dir
+  ctx.lineWidth = 26;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#ffd84d';
+  ctx.shadowBlur = 30;
+  for (let i = 0; i < 3; i += 1) {
+    const cx = 256 + dir * (i * 110 - 110);
+    ctx.beginPath();
+    ctx.moveTo(cx - dir * 38, 52);
+    ctx.lineTo(cx + dir * 38, 128);
+    ctx.lineTo(cx - dir * 38, 204);
+    ctx.stroke();
+  }
+  // hot white core pass
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = '#fff6d8';
+  ctx.shadowBlur = 8;
+  for (let i = 0; i < 3; i += 1) {
+    const cx = 256 + dir * (i * 110 - 110);
+    ctx.beginPath();
+    ctx.moveTo(cx - dir * 38, 52);
+    ctx.lineTo(cx + dir * 38, 128);
+    ctx.lineTo(cx - dir * 38, 204);
+    ctx.stroke();
+  }
+  const tex = asTexture(canvas);
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Brushed metal with vertical streaks for counters/arches. */
 export function brushedMetalTexture(): THREE.CanvasTexture {
   const cached = cache.get('brushed');

@@ -55,7 +55,15 @@ export type EngineEvent =
   | { type: 'shieldBreak' }
   | { type: 'nearMiss'; bonus: number }
   | { type: 'goal'; meters: number; reward: number }
-  | { type: 'milestone'; multiplier: number };
+  | { type: 'milestone'; multiplier: number }
+  | { type: 'turn'; dir: -1 | 1 };
+
+/** A 90° corner in the track. dir +1 = turn right (screen), -1 = left. */
+export interface CornerEntity {
+  z: number;
+  dir: -1 | 1;
+  consumed: boolean;
+}
 
 export interface SettingsState {
   audio: boolean;

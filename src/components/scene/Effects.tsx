@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { sim } from '../../game/engine';
+import { bendPoint, sim, type BendOut } from '../../game/engine';
 import { useRunnerStore } from '../../game/runnerStore';
 import { softSpriteTexture } from './textures';
 
@@ -72,7 +72,17 @@ export function Effects() {
     return { lines, emberSeeds, steamSeeds, sparkDirs };
   }, []);
 
-  const tmp = useMemo(() => ({ m: new THREE.Matrix4(), p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3() }), []);
+  const tmp = useMemo(
+    () => ({
+      m: new THREE.Matrix4(),
+      p: new THREE.Vector3(),
+      q: new THREE.Quaternion(),
+      e: new THREE.Euler(),
+      s: new THREE.Vector3(),
+      bend: { x: 0, z: 0, yaw: 0 } as BendOut
+    }),
+    []
+  );
   const burst = useRef({ t: 99, x: 0, y: 0 });
   const prevCoins = useRef(0);
 
@@ -92,8 +102,10 @@ export function Effects() {
         const span = 140;
         const z = ((line.z - sim.distance * 1.5) % span + span) % span - 14;
         const stretch = line.len * (0.8 + sim.worldSpeed * 0.07);
-        tmp.p.set(line.x, line.y, z);
-        tmp.q.identity();
+        bendPoint(line.x, z, tmp.bend);
+        tmp.p.set(tmp.bend.x, line.y, tmp.bend.z);
+        tmp.e.set(0, tmp.bend.yaw, 0);
+        tmp.q.setFromEuler(tmp.e);
         tmp.s.set(1, 1, stretch);
         tmp.m.compose(tmp.p, tmp.q, tmp.s);
         lines.setMatrixAt(i, tmp.m);
@@ -113,9 +125,10 @@ export function Effects() {
         const span = 120;
         const z = ((seed.z - sim.distance) % span + span) % span - 10;
         const cycle = (t * seed.rate + seed.phase) % 1;
-        arr[i * 3] = seed.x + Math.sin(t * 2 + seed.phase * 9) * seed.sway;
+        bendPoint(seed.x + Math.sin(t * 2 + seed.phase * 9) * seed.sway, z, tmp.bend);
+        arr[i * 3] = tmp.bend.x;
         arr[i * 3 + 1] = 1.4 + cycle * 5;
-        arr[i * 3 + 2] = z;
+        arr[i * 3 + 2] = tmp.bend.z;
       }
       embers.geometry.attributes.position.needsUpdate = true;
       embers.material.opacity = 0.85;
@@ -133,9 +146,10 @@ export function Effects() {
         const span = 110;
         const z = ((seed.z - sim.distance) % span + span) % span - 8;
         const cycle = (t * seed.rate + seed.phase) % 1;
-        arr[i * 3] = seed.x + Math.sin(t * 1.2 + seed.phase * 7) * 0.5;
+        bendPoint(seed.x + Math.sin(t * 1.2 + seed.phase * 7) * 0.5, z, tmp.bend);
+        arr[i * 3] = tmp.bend.x;
         arr[i * 3 + 1] = 1.8 + cycle * 4.2;
-        arr[i * 3 + 2] = z;
+        arr[i * 3 + 2] = tmp.bend.z;
       }
       steam.geometry.attributes.position.needsUpdate = true;
     }

@@ -46,6 +46,22 @@ export const GOAL_REWARD_BASE = 50;
 
 export const NEAR_MISS_BONUS = 150;
 
+/**
+ * Corner system (Temple Run turns): the course throws 90° corners at the
+ * runner; swipe the matching direction inside the window or crash into the
+ * corner wall. Gaps keep at most one corner inside the spawn horizon.
+ */
+export const CORNER_FIRST_AT = 180;
+export const CORNER_MIN_GAP = 140;
+export const CORNER_MAX_GAP = 260;
+/** swipe accepted while corner is between these z bounds */
+export const TURN_WINDOW_AHEAD = 9;
+export const TURN_FAIL_Z = -0.55;
+export const TURN_BONUS = 100;
+/** clear runway reserved around a corner (no obstacles/coins) */
+export const CORNER_CLEAR_BEFORE = 8;
+export const CORNER_CLEAR_AFTER = 22;
+
 export const EMPTY_POWERUPS: PowerupTimers = {
   magnet: 0,
   shield: 0,

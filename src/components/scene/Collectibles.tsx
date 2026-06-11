@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { COIN_POOL_SIZE } from '../../game/constants';
-import { sim } from '../../game/engine';
+import { bendPoint, sim, type BendOut } from '../../game/engine';
 import { coinFaceTexture } from './textures';
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -18,13 +18,14 @@ export function Collectibles() {
 
   const faceTex = useMemo(() => coinFaceTexture(), []);
 
-  const { dummy, euler, quat, scl, pos } = useMemo(
+  const { dummy, euler, quat, scl, pos, bend } = useMemo(
     () => ({
       dummy: new THREE.Matrix4(),
       euler: new THREE.Euler(0, 0, 0, 'YXZ'),
       quat: new THREE.Quaternion(),
       scl: new THREE.Vector3(1, 1, 1),
-      pos: new THREE.Vector3()
+      pos: new THREE.Vector3(),
+      bend: { x: 0, z: 0, yaw: 0 } as BendOut
     }),
     []
   );
@@ -43,14 +44,15 @@ export function Collectibles() {
       }
       const pop = coin.pull > 0 ? 1.18 : 1;
       scl.setScalar(pop);
-      pos.set(coin.x, coin.y, coin.z);
-      // cylinder axis is +Y: tip face toward camera (RX 90°) then spin
-      euler.set(Math.PI / 2, coin.spin, 0);
+      bendPoint(coin.x, coin.z, bend);
+      pos.set(bend.x, coin.y, bend.z);
+      // cylinder axis is +Y: tip face toward camera (RX 90°) then spin (+ corner yaw)
+      euler.set(Math.PI / 2, coin.spin + bend.yaw, 0);
       quat.setFromEuler(euler);
       dummy.compose(pos, quat, scl);
       face.setMatrixAt(i, dummy);
-      // torus ring already faces ±Z: only the spin
-      euler.set(0, coin.spin, 0);
+      // torus ring already faces ±Z: only the spin (+ corner yaw)
+      euler.set(0, coin.spin + bend.yaw, 0);
       quat.setFromEuler(euler);
       dummy.compose(pos, quat, scl);
       rim.setMatrixAt(i, dummy);

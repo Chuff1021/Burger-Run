@@ -10,6 +10,7 @@ export type SoundCue =
   | 'crash'
   | 'jump'
   | 'slide'
+  | 'turn'
   | 'start'
   | 'goal'
   | 'shieldBreak'
@@ -108,6 +109,12 @@ export function playCue(cue: SoundCue, enabled: boolean) {
     case 'slide':
       noiseBurst(now, 0.22, 0.05);
       tone(220, now, 0.16, { type: 'sine', gain: 0.035, slideTo: 120 });
+      break;
+    case 'turn':
+      // banked-corner whoosh
+      noiseBurst(now, 0.32, 0.08);
+      tone(340, now, 0.26, { type: 'sine', gain: 0.05, slideTo: 760 });
+      tone(510, now + 0.08, 0.2, { type: 'triangle', gain: 0.04, slideTo: 980 });
       break;
     case 'crash':
       noiseBurst(now, 0.5, 0.2);

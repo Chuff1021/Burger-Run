@@ -2,7 +2,7 @@ import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { sim } from '../../game/engine';
+import { bendPoint, sim, type BendOut } from '../../game/engine';
 import { laneX } from '../../game/math';
 import type { ObstacleEntity, ObstacleKind } from '../../game/types';
 import { cautionStripeTexture } from './textures';
@@ -37,6 +37,7 @@ interface ObstacleMats {
   armMetal: THREE.MeshStandardMaterial;
   armPad: THREE.MeshStandardMaterial;
   warn: THREE.MeshStandardMaterial;
+  warnRing: THREE.MeshBasicMaterial;
 }
 
 function useObstacleMats(): ObstacleMats {
@@ -58,11 +59,13 @@ function useObstacleMats(): ObstacleMats {
       flameOuter: new THREE.MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff5a0a', emissiveIntensity: 2.8, transparent: true, opacity: 0.85 }),
       flameInner: new THREE.MeshStandardMaterial({ color: '#ffd84d', emissive: '#ffcf2e', emissiveIntensity: 3.2, transparent: true, opacity: 0.9 }),
       grate: new THREE.MeshStandardMaterial({ color: '#14171d', metalness: 0.85, roughness: 0.3 }),
-      gateFrame: new THREE.MeshStandardMaterial({ color: '#243044', metalness: 0.8, roughness: 0.25, emissive: '#0c3b4a', emissiveIntensity: 0.6 }),
-      gateBeam: new THREE.MeshStandardMaterial({ color: '#24d6ff', emissive: '#24d6ff', emissiveIntensity: 2.6, transparent: true, opacity: 0.85 }),
+      gateFrame: new THREE.MeshStandardMaterial({ color: '#2e2430', metalness: 0.8, roughness: 0.25, emissive: '#3b0c14', emissiveIntensity: 0.7 }),
+      // hazard color language: anything that can kill you glows RED
+      gateBeam: new THREE.MeshStandardMaterial({ color: '#ff3b2a', emissive: '#ff2212', emissiveIntensity: 2.8, transparent: true, opacity: 0.9 }),
       armMetal: new THREE.MeshStandardMaterial({ color: '#c88723', metalness: 0.75, roughness: 0.25 }),
-      armPad: new THREE.MeshStandardMaterial({ color: '#2a3442', metalness: 0.9, roughness: 0.2, emissive: '#24d6ff', emissiveIntensity: 0.4 }),
-      warn: new THREE.MeshStandardMaterial({ color: '#ff2f2f', emissive: '#ff1f1f', emissiveIntensity: 1.8 })
+      armPad: new THREE.MeshStandardMaterial({ color: '#2a3442', metalness: 0.9, roughness: 0.2, emissive: '#ff2212', emissiveIntensity: 0.55 }),
+      warn: new THREE.MeshStandardMaterial({ color: '#ff2f2f', emissive: '#ff1f1f', emissiveIntensity: 1.8 }),
+      warnRing: new THREE.MeshBasicMaterial({ color: '#ff3b2a', transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false })
     }),
     []
   );
@@ -246,6 +249,10 @@ function PooledKind({
           }}
         >
           <Model mats={mats} />
+          {/* red telegraph ring on the track — instant hazard read */}
+          <mesh material={mats.warnRing} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+            <ringGeometry args={[0.72, 1.08, 24]} />
+          </mesh>
         </group>
       ))}
     </group>
@@ -257,6 +264,7 @@ const KINDS: ObstacleKind[] = ['meatRoller', 'hotCrate', 'grillFlame', 'sauceGat
 export function Obstacles() {
   const mats = useObstacleMats();
   const registry = useRef(new Map<ObstacleKind, SlotHandles[]>());
+  const bendScratch = useRef<BendOut>({ x: 0, z: 0, yaw: 0 });
   const byKind = useMemo(() => {
     const map = new Map<ObstacleKind, ObstacleEntity[]>();
     for (const kind of KINDS) map.set(kind, []);
@@ -284,7 +292,9 @@ export function Obstacles() {
           continue;
         }
         slot.root.visible = true;
-        slot.root.position.set(laneX(entity.lane), 0, entity.z);
+        const bend = bendPoint(laneX(entity.lane), entity.z, bendScratch.current);
+        slot.root.position.set(bend.x, 0, bend.z);
+        slot.root.rotation.y = bend.yaw;
         if (slot.spin) slot.spin.rotation.x += dt * sim.worldSpeed * 0.8;
         if (slot.flameA) {
           const f = 0.8 + Math.abs(Math.sin(t * 11 + entity.seed)) * 0.5;

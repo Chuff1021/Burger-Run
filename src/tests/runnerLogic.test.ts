@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { JUMP_VELOCITY, LANES, LANE_CHANGE_TIME, OBSTACLES, POWERUP_DURATION } from '../game/constants';
-import { jump, moveLane, resetSim, sim, slide, stepSim } from '../game/engine';
+import { bendPoint, jump, moveLane, resetSim, sim, slide, stepSim } from '../game/engine';
 import { resolveSwipeGesture } from '../game/input';
 import { spawnChunk } from '../game/patterns';
 
@@ -132,6 +132,70 @@ describe('engine basics', () => {
     const startCoins = sim.runCoins;
     for (let i = 0; i < 120; i += 1) stepSim(1 / 60);
     expect(sim.runCoins).toBeGreaterThan(startCoins);
+  });
+});
+
+describe('corners', () => {
+  beforeEach(() => {
+    resetSim();
+    sim.corners.length = 0;
+  });
+
+  it('swiping the turn direction inside the window consumes the corner', () => {
+    sim.corners.push({ z: 5, dir: 1, consumed: false });
+    moveLane(1);
+    expect(sim.corners[0].consumed).toBe(true);
+    expect(sim.lane).toBe(1); // turn does not change lanes
+  });
+
+  it('missing the turn crashes into the corner wall', () => {
+    sim.corners.push({ z: 3, dir: -1, consumed: false });
+    let alive = true;
+    for (let i = 0; i < 60 && alive; i += 1) alive = stepSim(1 / 60);
+    expect(alive).toBe(false);
+  });
+
+  it('a consumed corner is crossed seamlessly and kicks the camera yaw', () => {
+    sim.corners.push({ z: 3, dir: 1, consumed: false });
+    moveLane(1);
+    let alive = true;
+    for (let i = 0; i < 60 && alive; i += 1) alive = stepSim(1 / 60);
+    expect(alive).toBe(true);
+    expect(sim.corners).toHaveLength(0);
+    expect(sim.cameraYawKick).toBeCloseTo(Math.PI / 2, 3);
+  });
+
+  it('bendPoint rotates points beyond a right-turn corner toward screen-right (-X)', () => {
+    sim.corners.push({ z: 10, dir: 1, consumed: false });
+    const out = { x: 0, z: 0, yaw: 0 };
+    bendPoint(0, 18, out); // 8m past the corner
+    expect(out.x).toBeCloseTo(-8, 4);
+    expect(out.z).toBeCloseTo(10, 4);
+    expect(out.yaw).toBeCloseTo(-Math.PI / 2, 4);
+    // points before the corner are untouched
+    bendPoint(1.2, 4, out);
+    expect(out.x).toBeCloseTo(1.2, 4);
+    expect(out.z).toBeCloseTo(4, 4);
+    expect(out.yaw).toBe(0);
+  });
+
+  it('corners eventually spawn during a long run with a clear runway around them', () => {
+    sim.powerups.shield = 9999; // survive obstacles while running far
+    let sawCorner = false;
+    for (let i = 0; i < 60 * 60 && sim.running; i += 1) {
+      stepSim(1 / 60);
+      sim.powerups.shield = 9999;
+      const corner = sim.corners[0];
+      if (corner) {
+        sawCorner = true;
+        // nothing spawned in the corner clear zone
+        for (const o of sim.obstacles) {
+          if (o.active) expect(Math.abs(o.z - corner.z)).toBeGreaterThan(4);
+        }
+        if (!corner.consumed && corner.z < 8) moveLane(corner.dir);
+      }
+    }
+    expect(sawCorner).toBe(true);
   });
 });
 

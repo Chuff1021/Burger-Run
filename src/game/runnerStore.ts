@@ -157,6 +157,10 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
           playCue('nearMiss', settings.audio);
           newToasts.push({ id: ++toastId, text: `NEAR MISS +${event.bonus}`, tone: 'cyan' });
           break;
+        case 'turn':
+          playCue('turn', settings.audio);
+          triggerHaptic(14, settings.haptics);
+          break;
         case 'goal':
           playCue('goal', settings.audio);
           newToasts.push({ id: ++toastId, text: `${event.meters.toLocaleString('en-US')}M GOAL +${event.reward} COINS`, tone: 'gold' });

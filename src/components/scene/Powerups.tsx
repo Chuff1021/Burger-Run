@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { sim } from '../../game/engine';
+import { bendPoint, sim, type BendOut } from '../../game/engine';
 import { laneX } from '../../game/math';
 import type { PowerupEntity, PowerupType } from '../../game/types';
 
@@ -95,6 +95,7 @@ function PickupModel({ type }: { type: PowerupType }) {
 
 export function Powerups() {
   const slotRefs = useRef(new Map<PowerupType, (THREE.Group | null)[]>());
+  const bendScratch = useRef<BendOut>({ x: 0, z: 0, yaw: 0 });
   const buckets = useMemo(() => {
     const map = new Map<PowerupType, PowerupEntity[]>();
     for (const type of TYPES) map.set(type, []);
@@ -120,8 +121,9 @@ export function Powerups() {
           continue;
         }
         slot.visible = true;
-        slot.position.set(laneX(entity.lane), 1.35 + Math.sin(t * 2.4 + entity.id) * 0.12, entity.z);
-        slot.rotation.y = t * 2.2;
+        const bend = bendPoint(laneX(entity.lane), entity.z, bendScratch.current);
+        slot.position.set(bend.x, 1.35 + Math.sin(t * 2.4 + entity.id) * 0.12, bend.z);
+        slot.rotation.y = t * 2.2 + bend.yaw;
       }
     }
   });

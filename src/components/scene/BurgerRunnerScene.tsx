@@ -1,10 +1,11 @@
 import { Environment } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@react-three/postprocessing';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { CHARACTER_ROSTER } from '../../game/constants';
 import { sim } from '../../game/engine';
+// (corner state is read straight off the sim inside useFrame)
 import { useRunnerStore } from '../../game/runnerStore';
 import { Collectibles } from './Collectibles';
 import { Effects } from './Effects';
@@ -16,10 +17,12 @@ import { Powerups } from './Powerups';
 
 const CAMERA_TARGET = new THREE.Vector3();
 const CAMERA_POSITION = new THREE.Vector3();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 function CameraRig() {
   const { camera } = useThree();
   const status = useRunnerStore((state) => state.status);
+  const yawOffset = useRef(0);
 
   /* eslint-disable react-hooks/immutability */
   useFrame((state, dt) => {
@@ -41,13 +44,28 @@ function CameraRig() {
       return;
     }
 
+    // ---- corner sweep: consume the engine's yaw kick, then ease back to 0 ----
+    if (sim.cameraYawKick !== 0) {
+      yawOffset.current += sim.cameraYawKick;
+      sim.cameraYawKick = 0;
+    }
+    yawOffset.current *= Math.pow(0.03, dt); // ~0.4s sweep through the corner
+    // pre-lean into an approaching corner so the player sees down the new leg
+    let lean = 0;
+    const corner = sim.corners[0];
+    if (corner && corner.z < 16 && corner.z > 0) {
+      const turnYaw = -corner.dir * (Math.PI / 2);
+      lean = turnYaw * 0.32 * (1 - corner.z / 16);
+    }
+    const yaw = yawOffset.current + lean;
+
     CAMERA_POSITION.set(
       sim.laneX * 0.5 + shakeX,
       3.6 + sim.playerY * 0.3 + shakeY,
       -6.6 - Math.min(1.4, sim.worldSpeed * 0.028)
-    );
+    ).applyAxisAngle(Y_AXIS, yaw);
     camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.0003, dt));
-    CAMERA_TARGET.set(sim.laneX * 0.36, 1.5 + sim.playerY * 0.25, 9);
+    CAMERA_TARGET.set(sim.laneX * 0.36, 1.5 + sim.playerY * 0.25, 9).applyAxisAngle(Y_AXIS, yaw);
     camera.lookAt(CAMERA_TARGET);
     if ('fov' in camera) {
       const cam = camera as THREE.PerspectiveCamera;
