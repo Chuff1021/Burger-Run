@@ -305,23 +305,30 @@ describe('boss fight (smash-style)', () => {
     expect(boss.percent).toBe(0);
   });
 
-  it('attacks only damage the boss during punish windows (clank otherwise)', () => {
-    // force a non-vulnerable moment
+  it('attacks ALWAYS damage the boss and hits interrupt his attack (meleelight rule)', () => {
     boss.phase = 'attack';
     boss.attack = null;
+    stepBoss(1 / 60); // boss starts an attack
+    expect(boss.attack).not.toBeNull();
     sim.laneX = boss.bossX + 2; // in range
     bossTap();
     step(0.12); // through startup
-    expect(boss.percent).toBe(0); // clanked, no damage
-
-    boss.phase = 'recovery';
-    boss.phaseT = 0;
-    boss.atkPhase = 'idle';
-    sim.laneX = boss.bossX + 2;
-    bossTap();
-    step(0.12);
-    expect(boss.percent).toBeGreaterThan(0);
+    expect(boss.percent).toBeGreaterThan(0); // damage lands mid-attack
     expect(boss.hitstopT).toBeGreaterThan(0); // hitstop applied
+    expect(boss.bossStunT).toBeGreaterThan(0); // and he is in hitstun
+    // his attack timer is frozen while stunned
+    const tBefore = boss.attack!.t;
+    boss.hitstopT = 0;
+    stepBoss(1 / 60);
+    expect(boss.attack!.t).toBe(tBefore);
+  });
+
+  it('double jump works and landing restores both jumps', () => {
+    expect(bossJump()).toBe(true);
+    expect(bossJump()).toBe(true); // air jump
+    expect(bossJump()).toBe(false); // exhausted
+    while (!sim.grounded) stepBoss(1 / 60);
+    expect(bossJump()).toBe(true);
   });
 
   it('whiffed attacks out of range deal nothing and drop the combo', () => {

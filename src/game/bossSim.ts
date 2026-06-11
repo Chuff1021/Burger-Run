@@ -82,6 +82,9 @@ export interface BossSim {
   atkHeavy: boolean;
   atkBuffer: number;
   hitFlash: number;
+  /** meleelight rule: getting hit cancels your move — boss stun freezes his attack */
+  bossStunT: number;
+  jumpsUsed: number;
   events: BossEvent[];
 }
 
@@ -116,6 +119,8 @@ export const boss: BossSim = {
   atkHeavy: false,
   atkBuffer: 0,
   hitFlash: 0,
+  bossStunT: 0,
+  jumpsUsed: 0,
   events: []
 };
 
@@ -190,6 +195,8 @@ export function startBoss() {
   boss.atkHeavy = false;
   boss.atkBuffer = 0;
   boss.hitFlash = 0;
+  boss.bossStunT = 0;
+  boss.jumpsUsed = 0;
   boss.events.length = 0;
   // park the puppet stage-left, facing the boss
   sim.lane = 1;
@@ -225,17 +232,26 @@ let dashTarget = 1.2;
 
 export function bossJump(): boolean {
   if (fightInputBlocked()) return false;
-  if (!sim.grounded) return false;
-  sim.verticalVelocity = JUMP_VELOCITY;
-  sim.grounded = false;
-  sim.slideTimer = 0;
-  return true;
+  if (sim.grounded) {
+    sim.verticalVelocity = JUMP_VELOCITY;
+    sim.grounded = false;
+    sim.slideTimer = 0;
+    boss.jumpsUsed = 1;
+    return true;
+  }
+  // double jump (meleelight: ~0.94x of the full hop)
+  if (boss.jumpsUsed < 2) {
+    sim.verticalVelocity = JUMP_VELOCITY * 0.94;
+    boss.jumpsUsed = 2;
+    return true;
+  }
+  return false;
 }
 
 export function bossSlide(): boolean {
   if (fightInputBlocked()) return false;
-  // full meter during a punish window = BURGER SLAM super
-  if ((boss.phase === 'recovery' || boss.phase === 'stagger') && boss.meter >= 1) {
+  // full meter = BURGER SLAM super, any time you can reach him
+  if (boss.meter >= 1 && Math.abs(sim.laneX - boss.bossX) < ATK_RANGE + 1) {
     boss.meter = 0;
     landHit(SUPER_DMG, true);
     boss.hearts = Math.min(3, boss.hearts + 1);
@@ -270,11 +286,7 @@ function beginAttack() {
   dashTarget = clamp(sim.laneX - ATK_LUNGE, STAGE_MIN_X, STAGE_MAX_X);
 }
 
-function bossVulnerable(): boolean {
-  return boss.phase === 'recovery' || boss.phase === 'stagger';
-}
-
-function landHit(damage: number, isSuper = false) {
+function landHit(damage: number, isSuper = false, aerial = false) {
   const staggerBonus = boss.phase === 'stagger' ? 1.25 : 1;
   const dealt = Math.round(damage * staggerBonus);
   boss.percent += dealt;
@@ -287,7 +299,9 @@ function landHit(damage: number, isSuper = false) {
   // launches use the full Smash impulse
   const kb = knockbackFor(dealt);
   boss.bossVelX = -kb * 0.45 * (isSuper ? 1.6 : 1);
-  boss.bossVelY = kb * 0.3;
+  boss.bossVelY = kb * (aerial ? 0.55 : 0.3);
+  // hitstun cancels his current action (meleelight: hitstun = kb * 0.4 frames)
+  boss.bossStunT = Math.min(0.55, (kb * 0.4) / 60 + 0.12);
   boss.events.push({ type: 'bossHit', combo: boss.combo, damage: dealt });
 
   // crossing a pip threshold = LAUNCH
@@ -372,7 +386,10 @@ export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
   const dt = rawDt * boss.timeScale;
 
   boss.time += dt;
-  boss.phaseT += dt;
+  boss.bossStunT = Math.max(0, boss.bossStunT - dt);
+  // while stunned, the boss cannot advance his attacks or phases
+  const bossActs = boss.bossStunT <= 0;
+  if (bossActs) boss.phaseT += dt;
   boss.invulnT = Math.max(0, boss.invulnT - dt);
   boss.hitFlash = Math.max(0, boss.hitFlash - dt * 3);
   sim.shake = Math.max(0, sim.shake - dt * 2.2);
@@ -390,6 +407,7 @@ export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
       sim.playerY = 0;
       sim.verticalVelocity = 0;
       sim.grounded = true;
+      boss.jumpsUsed = 0;
     }
   }
   sim.slideTimer = Math.max(0, sim.slideTimer - dt);
@@ -401,18 +419,9 @@ export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
     if (boss.atkPhase === 'startup' && boss.atkT >= ATK_STARTUP) {
       boss.atkPhase = 'active';
       boss.atkT = 0;
-      // connect?
-      if (Math.abs(sim.laneX - boss.bossX) < ATK_RANGE && boss.bossY < 1.5) {
-        if (bossVulnerable()) {
-          landHit(boss.atkHeavy ? HEAVY_DMG : LIGHT_DMG);
-        } else {
-          // clank: blocked, player bounced back
-          boss.combo = 0;
-          sim.laneFromX = sim.laneX;
-          sim.laneT = 0;
-          dashTarget = clamp(sim.laneX + 0.8, STAGE_MIN_X, STAGE_MAX_X);
-          boss.events.push({ type: 'clank' });
-        }
+      // connect? (meleelight rule: pressing attack ALWAYS matters)
+      if (Math.abs(sim.laneX - boss.bossX) < ATK_RANGE && boss.bossY < 2.2) {
+        landHit(boss.atkHeavy ? HEAVY_DMG : LIGHT_DMG, false, !sim.grounded);
       } else {
         boss.combo = 0; // whiff drops the combo
       }
@@ -422,7 +431,7 @@ export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
     } else if (boss.atkPhase === 'recover' && boss.atkT >= ATK_RECOVER) {
       boss.atkPhase = 'idle';
       boss.atkT = 0;
-      if (boss.atkBuffer > 0 && bossVulnerable()) {
+      if (boss.atkBuffer > 0) {
         boss.atkBuffer = 0;
         beginAttack();
       }
@@ -465,7 +474,7 @@ export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
         break;
       }
       const attack = boss.attack;
-      attack.t += dt;
+      if (bossActs) attack.t += dt;
       const k = attack.t / attack.telegraph;
 
       if (attack.type === 'lowSweep' || attack.type === 'highSweep') {
@@ -588,7 +597,7 @@ export function bossPrompt(): string {
       break;
     }
     case 'recovery':
-      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER SLAM!' : 'PUNISH! TAP TO ATTACK!';
+      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER SLAM!' : 'HE\u2019S OPEN — TAP TAP TAP!';
     case 'windup':
       return 'BIG ONE — JUMP!';
     case 'stagger':
