@@ -1,6 +1,10 @@
 import type { CharacterDefinition, ObstacleDefinition, ObstacleKind, PowerupTimers } from './types';
 
-export const LANES = [-2.4, 0, 2.4] as const;
+/**
+ * Camera looks down +Z, so +X is SCREEN-LEFT. Index 0 = screen-left lane,
+ * index 2 = screen-right lane, so moveLane(+1) moves right ON SCREEN.
+ */
+export const LANES = [2.4, 0, -2.4] as const;
 export const LANE_WIDTH = 2.4;
 
 export const START_SPEED = 12.5;
@@ -16,11 +20,18 @@ export const COIN_POOL_SIZE = 140;
 export const OBSTACLE_POOL_SIZE = 40;
 export const POWERUP_POOL_SIZE = 8;
 
-export const GRAVITY = 27;
-export const JUMP_VELOCITY = 10.6;
-export const FAST_FALL_VELOCITY = -16;
-export const SLIDE_DURATION = 0.8;
-export const LANE_LERP = 13;
+/**
+ * Temple Run-style movement tuning (from reference-game analysis):
+ * - lane change: fixed-duration tween with quadratic ease-out, retargetable
+ * - jump: snappy fixed arc (~0.62s) with a heavier fall for weight
+ * - slide: can cancel a jump into a fast-fall slam
+ */
+export const LANE_CHANGE_TIME = 0.18;
+export const GRAVITY = 35;
+export const FALL_GRAVITY_MULT = 1.4;
+export const JUMP_VELOCITY = 11.4;
+export const FAST_FALL_VELOCITY = -20;
+export const SLIDE_DURATION = 0.75;
 
 export const MAGNET_RADIUS_Z = 9;
 export const MAGNET_PULL_SPEED = 26;

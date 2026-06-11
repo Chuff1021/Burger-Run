@@ -1,12 +1,24 @@
 import { useEffect, useRef } from 'react';
-import { resolveSwipeGesture } from '../game/input';
+import { resolveSwipeGesture, type SwipeDirection } from '../game/input';
 import { useRunnerStore } from '../game/runnerStore';
 
+/** pixels of travel before a swipe fires — crossing this MID-GESTURE triggers instantly */
+const SWIPE_FIRE_PX = 26;
+/** smaller fallback threshold for quick flicks resolved on release */
+const SWIPE_RELEASE_PX = 18;
+
+interface GestureState {
+  x: number;
+  y: number;
+  id: number;
+  fired: boolean;
+}
+
 export function useRunnerInput() {
-  const pointerStart = useRef<{ x: number; y: number; id: number } | null>(null);
+  const gesture = useRef<GestureState | null>(null);
 
   useEffect(() => {
-    const applySwipe = (direction: ReturnType<typeof resolveSwipeGesture>) => {
+    const apply = (direction: SwipeDirection | null) => {
       if (!direction) return;
       const store = useRunnerStore.getState();
       if (direction === 'left') store.moveLane(-1);
@@ -31,29 +43,43 @@ export function useRunnerInput() {
 
     const onPointerDown = (event: PointerEvent) => {
       if (!event.isPrimary) return;
-      pointerStart.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
+      gesture.current = { x: event.clientX, y: event.clientY, id: event.pointerId, fired: false };
+    };
+
+    // fire the action the moment the swipe is unambiguous — no waiting for lift
+    const onPointerMove = (event: PointerEvent) => {
+      const start = gesture.current;
+      if (!start || start.fired || start.id !== event.pointerId) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_FIRE_PX) return;
+      start.fired = true;
+      apply(resolveSwipeGesture(start, { x: event.clientX, y: event.clientY }, SWIPE_FIRE_PX));
     };
 
     const onPointerUp = (event: PointerEvent) => {
-      const start = pointerStart.current;
+      const start = gesture.current;
       if (!start || start.id !== event.pointerId) return;
-      pointerStart.current = null;
-
-      applySwipe(resolveSwipeGesture(start, { x: event.clientX, y: event.clientY }));
+      gesture.current = null;
+      if (start.fired) return;
+      // quick flick fallback: resolved on release with a lower bar
+      apply(resolveSwipeGesture(start, { x: event.clientX, y: event.clientY }, SWIPE_RELEASE_PX));
     };
 
     const onPointerCancel = () => {
-      pointerStart.current = null;
+      gesture.current = null;
     };
 
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerup', onPointerUp, { passive: true });
     window.addEventListener('pointercancel', onPointerCancel, { passive: true });
 
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerCancel);
     };

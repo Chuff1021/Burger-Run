@@ -42,12 +42,12 @@ function CameraRig() {
     }
 
     CAMERA_POSITION.set(
-      sim.laneX * 0.42 + shakeX,
+      sim.laneX * 0.5 + shakeX,
       3.6 + sim.playerY * 0.3 + shakeY,
       -6.6 - Math.min(1.4, sim.worldSpeed * 0.028)
     );
-    camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.0008, dt));
-    CAMERA_TARGET.set(sim.laneX * 0.3, 1.5 + sim.playerY * 0.25, 9);
+    camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.0003, dt));
+    CAMERA_TARGET.set(sim.laneX * 0.36, 1.5 + sim.playerY * 0.25, 9);
     camera.lookAt(CAMERA_TARGET);
     if ('fov' in camera) {
       const cam = camera as THREE.PerspectiveCamera;

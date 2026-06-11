@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { JUMP_VELOCITY, OBSTACLES, POWERUP_DURATION } from '../game/constants';
+import { JUMP_VELOCITY, LANES, LANE_CHANGE_TIME, OBSTACLES, POWERUP_DURATION } from '../game/constants';
 import { jump, moveLane, resetSim, sim, slide, stepSim } from '../game/engine';
 import { resolveSwipeGesture } from '../game/input';
 import { spawnChunk } from '../game/patterns';
@@ -25,6 +25,34 @@ describe('engine basics', () => {
     moveLane(1);
     moveLane(1);
     expect(sim.lane).toBe(2);
+  });
+
+  it('moveLane(+1) moves RIGHT on screen (-X when camera looks down +Z)', () => {
+    // regression guard for the inverted-swipe bug: camera looks toward +Z,
+    // so "screen right" is world -X — lane index must increase toward -X
+    moveLane(1);
+    for (let i = 0; i < 30; i += 1) stepSim(1 / 60);
+    expect(sim.laneX).toBeLessThan(-1.5);
+    expect(LANES[2]).toBeLessThan(LANES[0]);
+  });
+
+  it('completes a lane change in roughly LANE_CHANGE_TIME', () => {
+    moveLane(-1);
+    const steps = Math.ceil((LANE_CHANGE_TIME + 0.05) / (1 / 60));
+    for (let i = 0; i < steps; i += 1) stepSim(1 / 60);
+    expect(Math.abs(sim.laneX - LANES[0])).toBeLessThan(0.01);
+  });
+
+  it('retargets a lane change mid-tween (double swipe crosses two lanes)', () => {
+    moveLane(-1);
+    for (let i = 0; i < 5; i += 1) stepSim(1 / 60); // mid-tween
+    moveLane(-1); // ignored at edge? no — from lane 0 it clamps
+    expect(sim.lane).toBe(0);
+    moveLane(1);
+    moveLane(1);
+    for (let i = 0; i < 30; i += 1) stepSim(1 / 60);
+    expect(sim.lane).toBe(2);
+    expect(Math.abs(sim.laneX - LANES[2])).toBeLessThan(0.01);
   });
 
   it('only jumps when grounded', () => {

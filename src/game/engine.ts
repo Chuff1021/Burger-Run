@@ -4,13 +4,14 @@ import {
   COIN_POOL_SIZE,
   DESPAWN_Z,
   EMPTY_POWERUPS,
+  FALL_GRAVITY_MULT,
   FAST_FALL_VELOCITY,
   GOALS,
   GOAL_REWARD_BASE,
   GRAVITY,
   JUMP_VELOCITY,
   LANES,
-  LANE_LERP,
+  LANE_CHANGE_TIME,
   MAGNET_PULL_SPEED,
   MAGNET_RADIUS_Z,
   MAX_SPEED,
@@ -55,6 +56,9 @@ export interface Sim {
   worldSpeed: number;
   lane: number;
   laneX: number;
+  /** lane-change tween state: world X at tween start, progress 0..1 */
+  laneFromX: number;
+  laneT: number;
   playerY: number;
   verticalVelocity: number;
   grounded: boolean;
@@ -120,6 +124,8 @@ export const sim: Sim = {
   worldSpeed: START_SPEED,
   lane: 1,
   laneX: 0,
+  laneFromX: 0,
+  laneT: 1,
   playerY: 0,
   verticalVelocity: 0,
   grounded: true,
@@ -155,6 +161,8 @@ export function resetSim() {
   sim.worldSpeed = START_SPEED;
   sim.lane = 1;
   sim.laneX = 0;
+  sim.laneFromX = 0;
+  sim.laneT = 1;
   sim.playerY = 0;
   sim.verticalVelocity = 0;
   sim.grounded = true;
@@ -188,7 +196,13 @@ export function stopSim() {
 
 export function moveLane(direction: -1 | 1) {
   if (!sim.running) return;
-  sim.lane = clamp(sim.lane + direction, 0, 2);
+  const next = clamp(sim.lane + direction, 0, 2);
+  if (next === sim.lane) return;
+  // start a fresh fixed-duration tween from wherever we are right now —
+  // retargetable mid-move, so double-swipes chain across two lanes
+  sim.laneFromX = sim.laneX;
+  sim.lane = next;
+  sim.laneT = 0;
 }
 
 export function jump(): boolean {
@@ -215,7 +229,9 @@ export function isSliding(): boolean {
 }
 
 function obstacleHit(obstacle: ObstacleEntity): boolean {
-  if (!obstacle.active || obstacle.lane !== sim.lane) return false;
+  if (!obstacle.active) return false;
+  // physical proximity, not lane index — a half-finished dodge gets you clear
+  if (Math.abs((LANES[obstacle.lane] ?? 0) - sim.laneX) > 1.2) return false;
   if (Math.abs(obstacle.z - PLAYER_Z) > 0.95) return false;
   const clearance = OBSTACLES[obstacle.kind].clearance;
   if (clearance === 'jump' && sim.playerY > 0.92) return false;
@@ -262,14 +278,19 @@ export function stepSim(dt: number): boolean {
     sim.events.push({ type: 'goal', meters, reward });
   }
 
-  // lane glide
-  const laneXTarget = LANES[sim.lane] ?? 0;
-  sim.laneX += (laneXTarget - sim.laneX) * Math.min(1, dt * LANE_LERP);
+  // lane change: fixed-duration tween, quadratic ease-out (Temple Run feel)
+  if (sim.laneT < 1) {
+    sim.laneT = Math.min(1, sim.laneT + dt / LANE_CHANGE_TIME);
+    const ease = 1 - (1 - sim.laneT) * (1 - sim.laneT);
+    sim.laneX = sim.laneFromX + ((LANES[sim.lane] ?? 0) - sim.laneFromX) * ease;
+  } else {
+    sim.laneX = LANES[sim.lane] ?? 0;
+  }
 
-  // vertical physics
+  // vertical physics: heavier gravity on the way down for a weighty landing
   if (!sim.grounded) {
     sim.playerY += sim.verticalVelocity * dt;
-    sim.verticalVelocity -= GRAVITY * dt;
+    sim.verticalVelocity -= GRAVITY * (sim.verticalVelocity < 0 ? FALL_GRAVITY_MULT : 1) * dt;
     if (sim.playerY <= 0) {
       sim.playerY = 0;
       sim.verticalVelocity = 0;
@@ -330,7 +351,7 @@ export function stepSim(dt: number): boolean {
     } else {
       c.y = c.baseY + Math.sin(sim.time * 2.6 + c.id) * 0.07;
       const dz = Math.abs(c.z - PLAYER_Z);
-      if (c.lane === sim.lane && dz < COIN_COLLECT_RADIUS && Math.abs(c.y - 1.0 - sim.playerY) < 1.35) {
+      if (dz < COIN_COLLECT_RADIUS && Math.abs(c.x - sim.laneX) < 1.05 && Math.abs(c.y - 1.0 - sim.playerY) < 1.35) {
         c.active = false;
         coinsCollected += 1;
         despawned = true;
@@ -353,7 +374,7 @@ export function stepSim(dt: number): boolean {
       despawned = true;
       continue;
     }
-    if (pickup.lane === sim.lane && Math.abs(pickup.z - PLAYER_Z) < 1.2 && sim.playerY < 1.6) {
+    if (Math.abs((LANES[pickup.lane] ?? 0) - sim.laneX) < 1.15 && Math.abs(pickup.z - PLAYER_Z) < 1.2 && sim.playerY < 1.6) {
       pickup.active = false;
       despawned = true;
       sim.powerups[pickup.type] = POWERUP_DURATION[pickup.type];
