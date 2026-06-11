@@ -258,6 +258,10 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
           case 'dodge':
             playCue('nearMiss', settings.audio);
             break;
+          case 'perfectDodge':
+            playCue('nearMiss', settings.audio);
+            triggerHaptic([12, 16], settings.haptics);
+            break;
           case 'meterFull':
             playCue('powerup', settings.audio);
             triggerHaptic([20, 30, 20], settings.haptics);
@@ -269,6 +273,10 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
           case 'bossHit':
             playCue('punch', settings.audio);
             triggerHaptic(event.damage >= 18 ? [25, 20, 25] : 20, settings.haptics);
+            break;
+          case 'counterHit':
+            playCue('shieldBreak', settings.audio);
+            triggerHaptic([20, 20, 35], settings.haptics);
             break;
           case 'clank':
             playCue('uiClick', settings.audio);

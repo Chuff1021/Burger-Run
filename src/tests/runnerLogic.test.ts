@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { boss, bossJump, bossSlide, bossTap, startBoss, stepBoss } from '../game/bossSim';
+import { boss, bossJump, bossSlide, bossTap, STAGE_MAX_X, startBoss, stepBoss } from '../game/bossSim';
 import { JUMP_VELOCITY, LANES, LANE_CHANGE_TIME, OBSTACLES, POWERUP_DURATION } from '../game/constants';
 import { bendPoint, jump, moveLane, resetSim, sim, slide, stepSim } from '../game/engine';
 import { resolveSwipeGesture } from '../game/input';
@@ -305,7 +305,7 @@ describe('boss fight (smash-style)', () => {
     expect(boss.percent).toBe(0);
   });
 
-  it('attacks ALWAYS damage the boss and hits interrupt his attack (meleelight rule)', () => {
+  it('early counter hits interrupt a boss telegraph', () => {
     boss.phase = 'attack';
     boss.attack = null;
     stepBoss(1 / 60); // boss starts an attack
@@ -316,11 +316,49 @@ describe('boss fight (smash-style)', () => {
     expect(boss.percent).toBeGreaterThan(0); // damage lands mid-attack
     expect(boss.hitstopT).toBeGreaterThan(0); // hitstop applied
     expect(boss.bossStunT).toBeGreaterThan(0); // and he is in hitstun
-    // his attack timer is frozen while stunned
-    const tBefore = boss.attack!.t;
+    expect(boss.phase).toBe('recovery');
+  });
+
+  it('swinging into an armored active attack clanks instead of free damage', () => {
+    boss.phase = 'attack';
+    boss.attack = {
+      type: 'slam',
+      zoneX: sim.laneX,
+      telegraph: 1,
+      t: 0.75,
+      resolved: false,
+      pinX: boss.bossX + 1.5,
+      prevPinX: boss.bossX + 1.5
+    };
+    sim.laneX = boss.bossX + 2;
+    bossTap();
+    step(0.12);
+    expect(boss.percent).toBe(0);
+    expect(boss.combo).toBe(0);
+    expect(boss.events.some((event) => event.type === 'clank')).toBe(true);
+  });
+
+  it('boss attack timer freezes while stunned from a clean punish', () => {
+    boss.phase = 'attack';
+    boss.attack = null;
+    stepBoss(1 / 60);
+    sim.laneX = boss.bossX + 2;
+    bossTap();
+    step(0.12);
+    boss.attack = {
+      type: 'lowSweep',
+      zoneX: sim.laneX,
+      telegraph: 1,
+      t: 0.2,
+      resolved: false,
+      pinX: boss.bossX + 1.5,
+      prevPinX: boss.bossX + 1.5
+    };
+    boss.phase = 'attack';
+    const tBefore = boss.attack.t;
     boss.hitstopT = 0;
     stepBoss(1 / 60);
-    expect(boss.attack!.t).toBe(tBefore);
+    expect(boss.attack.t).toBe(tBefore);
   });
 
   it('double jump works and landing restores both jumps', () => {
@@ -331,10 +369,21 @@ describe('boss fight (smash-style)', () => {
     expect(bossJump()).toBe(true);
   });
 
-  it('whiffed attacks out of range deal nothing and drop the combo', () => {
+  it('punish taps rush into range on mobile', () => {
     boss.phase = 'recovery';
     boss.phaseT = 0;
-    sim.laneX = boss.bossX + 6; // far away
+    sim.laneX = 1.2; // menu-start spacing: visually far, but a valid punish window
+    bossTap();
+    step(0.12);
+    expect(boss.percent).toBeGreaterThan(0);
+    expect(boss.combo).toBe(1);
+  });
+
+  it('attacks beyond rush-assist range still whiff', () => {
+    boss.phase = 'recovery';
+    boss.phaseT = 0;
+    sim.laneX = STAGE_MAX_X;
+    boss.bossX = -10.5;
     bossTap();
     step(0.12);
     expect(boss.percent).toBe(0);

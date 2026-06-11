@@ -11,13 +11,13 @@ import { clamp } from './math';
 /**
  * Smash-style boss fight, side view. Fight axis = world X: the player
  * (rendered via the puppeted sim fields) duels THE MEGA MANAGER across a
- * floating stage. Mechanics built from fighting-game research:
+ * floating stage. Mechanics built as a Burger Run platform-boss duel:
  * - hitstop: Smash formula floor(d*0.65+6) frames, both fighters freeze
- * - input buffer: 160ms tap buffer (Smash Ultimate uses 9f)
- * - knockback: simplified Smash formula, scales with accumulated percent
- * - frame data: light 5f startup / 3f active / 10f recovery, chains to a
- *   heavy on the 3rd hit (Tough Love Arena chain pattern)
- * - boss telegraphs 0.8-1.4s, long recoveries = punish windows
+ * - input buffer: short tap buffer so mobile taps feel intentional
+ * - knockback: accumulated percent increases launch force
+ * - neutral rules: counter early telegraphs, punish recovery/stagger, clank
+ *   if you swing into armored active attacks
+ * - boss telegraphs clearly, then gives real punish windows instead of QTE mash
  */
 
 export type BossPhase = 'intro' | 'attack' | 'recovery' | 'windup' | 'stagger' | 'launch' | 'victory' | 'defeat';
@@ -38,8 +38,10 @@ export interface BossAttack {
 
 export type BossEvent =
   | { type: 'dodge' }
+  | { type: 'perfectDodge' }
   | { type: 'playerHit' }
   | { type: 'bossHit'; combo: number; damage: number }
+  | { type: 'counterHit' }
   | { type: 'clank' }
   | { type: 'superSlam' }
   | { type: 'stagger' }
@@ -82,7 +84,7 @@ export interface BossSim {
   atkHeavy: boolean;
   atkBuffer: number;
   hitFlash: number;
-  /** meleelight rule: getting hit cancels your move — boss stun freezes his attack */
+  /** hitstun temporarily freezes the boss after clean counters/punishes */
   bossStunT: number;
   jumpsUsed: number;
   events: BossEvent[];
@@ -147,14 +149,22 @@ const ATK_ACTIVE = 0.05; // ~3f
 const ATK_RECOVER = 0.17; // ~10f
 const ATK_RANGE = 3.2;
 const ATK_LUNGE = 0.95;
+const RUSH_ASSIST_RANGE = 9.75;
+const RUSH_STRIKE_DISTANCE = 2.45;
 /** buffer must outlive active+recover (~220ms) so mash-chains connect */
 const ATK_BUFFER_TIME = 0.28;
 const LIGHT_DMG = 12;
 const HEAVY_DMG = 18;
 const SUPER_DMG = 35;
+const COUNTER_TELEGRAPH_WINDOW = 0.48;
+const PUNISH_DAMAGE_MULT = 1.18;
+const COUNTER_DAMAGE_MULT = 1.35;
 /** percent thresholds where the next hit LAUNCHES a pip away */
 const PIP_THRESHOLDS = [60, 130, 200];
-const METER_PER_DODGE = 0.2;
+const METER_PER_DODGE = 0.18;
+const METER_PER_PERFECT_DODGE = 0.3;
+const METER_PER_HIT = 0.08;
+const METER_PER_HEAVY = 0.12;
 
 function hitstopFor(damage: number): number {
   // Smash: floor(d*0.65+6) frames @60fps, capped
@@ -239,7 +249,7 @@ export function bossJump(): boolean {
     boss.jumpsUsed = 1;
     return true;
   }
-  // double jump (meleelight: ~0.94x of the full hop)
+  // air jump: slightly lower than the grounded pop
   if (boss.jumpsUsed < 2) {
     sim.verticalVelocity = JUMP_VELOCITY * 0.94;
     boss.jumpsUsed = 2;
@@ -250,8 +260,9 @@ export function bossJump(): boolean {
 
 export function bossSlide(): boolean {
   if (fightInputBlocked()) return false;
-  // full meter = BURGER SLAM super, any time you can reach him
-  if (boss.meter >= 1 && Math.abs(sim.laneX - boss.bossX) < ATK_RANGE + 1) {
+  // full meter = BURGER BURST finisher, any time you can reach him
+  if (boss.meter >= 1 && Math.abs(sim.laneX - boss.bossX) < RUSH_ASSIST_RANGE) {
+    snapToStrikeRange();
     boss.meter = 0;
     landHit(SUPER_DMG, true);
     boss.hearts = Math.min(3, boss.hearts + 1);
@@ -280,18 +291,57 @@ function beginAttack() {
   boss.atkPhase = 'startup';
   boss.atkT = 0;
   boss.atkHeavy = boss.combo > 0 && (boss.combo + 1) % 3 === 0;
-  // lunge toward the boss
+  const opening = strikeWindow();
+  const dist = Math.abs(sim.laneX - boss.bossX);
+  // When the timing window is correct, mobile taps should feel like a rush-in
+  // punish instead of asking the player to manually inch into exact range.
+  const target = opening.canHit && opening.kind !== 'armored' && dist < RUSH_ASSIST_RANGE ? boss.bossX + RUSH_STRIKE_DISTANCE : sim.laneX - ATK_LUNGE;
   sim.laneFromX = sim.laneX;
   sim.laneT = 0;
-  dashTarget = clamp(sim.laneX - ATK_LUNGE, STAGE_MIN_X, STAGE_MAX_X);
+  dashTarget = clamp(target, STAGE_MIN_X, STAGE_MAX_X);
 }
 
-function landHit(damage: number, isSuper = false, aerial = false) {
-  const staggerBonus = boss.phase === 'stagger' ? 1.25 : 1;
-  const dealt = Math.round(damage * staggerBonus);
+type StrikeWindow = 'punish' | 'counter' | 'stagger' | 'finisher';
+
+function strikeWindow(): { canHit: boolean; mult: number; kind: StrikeWindow | 'armored' } {
+  if (boss.phase === 'stagger') return { canHit: true, mult: 1.28, kind: 'stagger' };
+  if (boss.phase === 'recovery') return { canHit: true, mult: PUNISH_DAMAGE_MULT, kind: 'punish' };
+  if (boss.phase === 'attack' && boss.attack && !boss.attack.resolved) {
+    const telegraphProgress = boss.attack.t / boss.attack.telegraph;
+    if (telegraphProgress <= COUNTER_TELEGRAPH_WINDOW) {
+      return { canHit: true, mult: COUNTER_DAMAGE_MULT, kind: 'counter' };
+    }
+    return { canHit: false, mult: 0, kind: 'armored' };
+  }
+  return { canHit: false, mult: 0, kind: 'armored' };
+}
+
+function clankWithArmor() {
+  boss.combo = 0;
+  boss.atkPhase = 'recover';
+  boss.atkT = 0;
+  boss.hitstopT = 0.12;
+  sim.shake = 0.5;
+  sim.laneFromX = sim.laneX;
+  sim.laneT = 0;
+  dashTarget = clamp(sim.laneX + 0.8, STAGE_MIN_X, STAGE_MAX_X);
+  boss.events.push({ type: 'clank' });
+}
+
+function snapToStrikeRange() {
+  const target = clamp(boss.bossX + RUSH_STRIKE_DISTANCE, STAGE_MIN_X, STAGE_MAX_X);
+  sim.laneX = target;
+  sim.laneFromX = target;
+  dashTarget = target;
+  sim.laneT = 1;
+}
+
+function landHit(damage: number, isSuper = false, aerial = false, window: StrikeWindow = isSuper ? 'finisher' : 'punish') {
+  const dealt = Math.round(damage);
   boss.percent += dealt;
   boss.combo += 1;
   boss.score += dealt * 12;
+  boss.meter = Math.min(1, boss.meter + (isSuper ? 0 : boss.atkHeavy ? METER_PER_HEAVY : METER_PER_HIT));
   boss.hitFlash = 1;
   boss.hitstopT = hitstopFor(dealt);
   sim.shake = Math.min(1, 0.25 + dealt * 0.02);
@@ -300,8 +350,13 @@ function landHit(damage: number, isSuper = false, aerial = false) {
   const kb = knockbackFor(dealt);
   boss.bossVelX = -kb * 0.45 * (isSuper ? 1.6 : 1);
   boss.bossVelY = kb * (aerial ? 0.55 : 0.3);
-  // hitstun cancels his current action (meleelight: hitstun = kb * 0.4 frames)
-  boss.bossStunT = Math.min(0.55, (kb * 0.4) / 60 + 0.12);
+  // clean counters and punish hits stun the boss; random armored swings do not.
+  boss.bossStunT = window === 'counter' || window === 'stagger' || isSuper ? Math.min(0.58, (kb * 0.4) / 60 + 0.14) : 0.12;
+  if (window === 'counter') {
+    boss.attack = null;
+    setPhase('recovery');
+    boss.events.push({ type: 'counterHit' });
+  }
   boss.events.push({ type: 'bossHit', combo: boss.combo, damage: dealt });
 
   // crossing a pip threshold = LAUNCH
@@ -352,9 +407,11 @@ function roundQueue(pip: number): AttackType[] {
 function resolveDodge(dodged: boolean) {
   if (dodged) {
     const before = boss.meter;
-    boss.meter = Math.min(1, boss.meter + METER_PER_DODGE);
-    boss.score += 100;
-    boss.events.push({ type: 'dodge' });
+    const attackProgress = boss.attack ? boss.attack.t / boss.attack.telegraph : 1;
+    const perfect = attackProgress > 0.86 || boss.phase === 'windup';
+    boss.meter = Math.min(1, boss.meter + (perfect ? METER_PER_PERFECT_DODGE : METER_PER_DODGE));
+    boss.score += perfect ? 180 : 100;
+    boss.events.push({ type: perfect ? 'perfectDodge' : 'dodge' });
     if (before < 1 && boss.meter >= 1) boss.events.push({ type: 'meterFull' });
   } else if (boss.invulnT <= 0) {
     boss.hearts -= 1;
@@ -419,9 +476,17 @@ export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
     if (boss.atkPhase === 'startup' && boss.atkT >= ATK_STARTUP) {
       boss.atkPhase = 'active';
       boss.atkT = 0;
-      // connect? (meleelight rule: pressing attack ALWAYS matters)
-      if (Math.abs(sim.laneX - boss.bossX) < ATK_RANGE && boss.bossY < 2.2) {
-        landHit(boss.atkHeavy ? HEAVY_DMG : LIGHT_DMG, false, !sim.grounded);
+      const dist = Math.abs(sim.laneX - boss.bossX);
+      const opening = strikeWindow();
+      if (boss.bossY < 2.2 && opening.canHit && opening.kind !== 'armored' && dist < RUSH_ASSIST_RANGE) {
+        if (dist >= ATK_RANGE) snapToStrikeRange();
+        landHit((boss.atkHeavy ? HEAVY_DMG : LIGHT_DMG) * opening.mult, false, !sim.grounded, opening.kind);
+      } else if (dist < ATK_RANGE && boss.bossY < 2.2) {
+        if (opening.kind === 'armored') {
+          clankWithArmor();
+        } else {
+          boss.combo = 0; // whiff drops the combo
+        }
       } else {
         boss.combo = 0; // whiff drops the combo
       }
@@ -597,11 +662,11 @@ export function bossPrompt(): string {
       break;
     }
     case 'recovery':
-      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER SLAM!' : 'HE\u2019S OPEN — TAP TAP TAP!';
+      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER BURST!' : 'TAP — RUSH PUNISH!';
     case 'windup':
       return 'BIG ONE — JUMP!';
     case 'stagger':
-      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER SLAM!' : 'HE’S DIZZY — TAP TAP TAP!';
+      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER BURST!' : 'STAGGERED — TAP COMBO!';
     case 'launch':
       return 'LAUNCHED!';
     case 'victory':

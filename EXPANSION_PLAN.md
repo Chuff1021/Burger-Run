@@ -54,11 +54,11 @@ HUD: player hearts left, boss pips right, special meter center.
    (red telegraph rings — same language as the runner):
    - lane slam (move), low sweep (jump), high sweep (slide),
      ring shockwave (jump timed), feint-double (the skill test)
-   - Every clean dodge fills the **SMASH METER**.
+   - Every clean dodge fills the **BURST METER**.
 2. **STAGGER** — after a pattern set, the boss winds up a big attack; dodge
    it and he staggers, dropping his guard.
 3. **STRIKE PHASE** — "GO!" prompt: swipe UP to leap in and land combo hits
-   (each swipe = a hit, mash window ~3s). Full smash meter = swipe DOWN
+   counter early telegraphs or punish recovery windows. Full burst meter = swipe DOWN
    instead for the **BURGER SLAM** super (cinematic camera, big damage).
 4. Boss loses a pip → next round, faster pattern + a new attack mixed in.
    Three pips = KO with slow-mo Smash-style launch off the platform.

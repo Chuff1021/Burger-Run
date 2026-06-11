@@ -39,13 +39,13 @@ export function BossHUD() {
         </div>
       )}
 
-      {/* smash meter */}
+      {/* finisher meter */}
       <div className={`smash-meter ${bossMeter >= 1 ? 'ready' : ''}`}>
         <Zap size={18} fill={bossMeter >= 1 ? 'currentColor' : 'none'} />
         <div className="smash-track">
           <i style={{ width: `${Math.round(bossMeter * 100)}%` }} />
         </div>
-        <span>SMASH</span>
+        <span>BURST</span>
       </div>
 
       {/* action prompt */}

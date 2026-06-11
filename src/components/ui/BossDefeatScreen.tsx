@@ -26,7 +26,7 @@ export function BossDefeatScreen() {
         ) : (
           <div className="reward-banner">
             <span>
-              Dodge his attacks to fill your <b>SMASH</b> meter — when he&apos;s dizzy, <b>tap tap tap</b>!
+              Dodge late, counter early, and punish recovery windows to charge your <b>BURST</b> finisher.
             </span>
           </div>
         )}
