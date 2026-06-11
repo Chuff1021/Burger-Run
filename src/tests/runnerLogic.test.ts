@@ -228,6 +228,63 @@ describe('pattern spawning', () => {
   });
 });
 
+describe('campaign mode', () => {
+  it('marathon has no checkpoints; campaign loads World 1', () => {
+    resetSim('marathon');
+    expect(sim.checkpoints).toHaveLength(0);
+    resetSim('campaign');
+    expect(sim.checkpoints).toEqual([600, 1250, 2000]);
+    expect(sim.nextCheckpointIndex).toBe(0);
+  });
+
+  it('crossing a checkpoint emits the event once', () => {
+    resetSim('campaign');
+    sim.distance = 598;
+    sim.powerups.shield = 9999;
+    const events: string[] = [];
+    for (let i = 0; i < 120; i += 1) {
+      stepSim(1 / 60);
+      sim.powerups.shield = 9999;
+      for (const e of sim.events) events.push(e.type);
+      sim.events.length = 0;
+    }
+    expect(events.filter((t) => t === 'checkpoint')).toHaveLength(1);
+  });
+
+  it('crossing the finish line emits finish and stops the run', () => {
+    resetSim('campaign', 1960);
+    sim.powerups.shield = 9999;
+    let sawFinish = false;
+    for (let i = 0; i < 300 && sim.running; i += 1) {
+      stepSim(1 / 60);
+      sim.powerups.shield = 9999;
+      if (sim.events.some((e) => e.type === 'finish')) sawFinish = true;
+      sim.events.length = 0;
+    }
+    expect(sawFinish).toBe(true);
+    expect(sim.running).toBe(false);
+  });
+
+  it('respawn carry restores coins and score at the checkpoint', () => {
+    resetSim('campaign', 600, { coins: 55, score: 12345 });
+    expect(sim.runCoins).toBe(55);
+    expect(sim.score).toBe(12345);
+    expect(sim.distance).toBe(600);
+    expect(sim.nextCheckpointIndex).toBe(1);
+  });
+
+  it('keeps a clear runway around checkpoint gates', () => {
+    for (let trial = 0; trial < 10; trial += 1) {
+      resetSim('campaign', 520);
+      for (const o of sim.obstacles) {
+        if (!o.active) continue;
+        const absolute = 520 + o.z;
+        expect(Math.abs(absolute - 600)).toBeGreaterThan(4);
+      }
+    }
+  });
+});
+
 describe('swipe gestures', () => {
   it('resolves the four directions', () => {
     expect(resolveSwipeGesture({ x: 0, y: 0 }, { x: 80, y: 4 })).toBe('right');

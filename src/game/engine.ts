@@ -1,5 +1,7 @@
 import {
   BOOST_MULTIPLIER,
+  CHECKPOINT_CLEAR_AFTER,
+  CHECKPOINT_CLEAR_BEFORE,
   COIN_COLLECT_RADIUS,
   COIN_POOL_SIZE,
   CORNER_CLEAR_AFTER,
@@ -34,7 +36,8 @@ import {
   START_SPEED,
   TURN_BONUS,
   TURN_FAIL_Z,
-  TURN_WINDOW_AHEAD
+  TURN_WINDOW_AHEAD,
+  WORLD1_CHECKPOINTS
 } from './constants';
 import { clamp } from './math';
 import { spawnChunk } from './patterns';
@@ -43,6 +46,7 @@ import type {
   CornerEntity,
   EngineEvent,
   ObstacleEntity,
+  PlayMode,
   PowerupEntity,
   PowerupTimers
 } from './types';
@@ -55,6 +59,11 @@ import type {
 
 export interface Sim {
   running: boolean;
+  mode: PlayMode;
+  /** campaign checkpoint distances (last = finish line); empty in marathon */
+  checkpoints: number[];
+  /** index of the next checkpoint not yet crossed */
+  nextCheckpointIndex: number;
   time: number;
   score: number;
   distance: number;
@@ -133,6 +142,9 @@ function createPowerupPool(): PowerupEntity[] {
 
 export const sim: Sim = {
   running: false,
+  mode: 'marathon',
+  checkpoints: [],
+  nextCheckpointIndex: 0,
   time: 0,
   score: 0,
   distance: 0,
@@ -173,15 +185,23 @@ declare global {
 }
 if (typeof window !== 'undefined') window.__burgerSim = sim;
 
-export function resetSim() {
+/**
+ * Resets the simulation. Campaign respawns pass a startDistance (the last
+ * checkpoint) so the run resumes mid-course with a clear runway.
+ */
+export function resetSim(mode: PlayMode = 'marathon', startDistance = 0, carry?: { coins: number; score: number }) {
   sim.running = true;
+  sim.mode = mode;
+  sim.checkpoints = mode === 'campaign' ? [...WORLD1_CHECKPOINTS] : [];
+  sim.nextCheckpointIndex = sim.checkpoints.findIndex((cp) => cp > startDistance);
+  if (sim.nextCheckpointIndex === -1) sim.nextCheckpointIndex = sim.checkpoints.length;
   sim.time = 0;
-  sim.score = 0;
-  sim.distance = 0;
-  sim.runCoins = 0;
+  sim.score = carry?.score ?? 0;
+  sim.distance = startDistance;
+  sim.runCoins = carry?.coins ?? 0;
   sim.multiplier = 1;
-  sim.speed = START_SPEED;
-  sim.worldSpeed = START_SPEED;
+  sim.speed = Math.min(MAX_SPEED, START_SPEED + startDistance * 0.003);
+  sim.worldSpeed = sim.speed;
   sim.lane = 1;
   sim.laneX = 0;
   sim.laneFromX = 0;
@@ -197,33 +217,57 @@ export function resetSim() {
   for (const c of sim.coins) c.active = false;
   for (const p of sim.pickups) p.active = false;
   sim.corners.length = 0;
-  sim.nextCornerDistance = CORNER_FIRST_AT + Math.random() * 60;
+  sim.nextCornerDistance = startDistance + CORNER_FIRST_AT * (startDistance > 0 ? 0.5 : 1) + Math.random() * 60;
   sim.cameraYawKick = 0;
   sim.lastTurnDir = 1;
   sim.turnLean = 0;
-  sim.nextGoalIndex = 0;
+  sim.nextGoalIndex = GOALS.findIndex((g) => g > startDistance);
+  if (sim.nextGoalIndex === -1) sim.nextGoalIndex = GOALS.length;
   sim.events.length = 0;
 
   // pre-fill the runway, keeping the first 20m clear
   sim.nextSpawnZ = 20;
   while (sim.nextSpawnZ < SPAWN_AHEAD_Z) {
-    spawnAhead(0);
+    spawnAhead(startDistance);
   }
   sim.poolVersion += 1;
 }
 
-/** Advance the spawn cursor by one chunk — or by a corner when one is due. */
+/** course end for campaign mode = last checkpoint (the finish line) */
+function courseEnd(): number {
+  return sim.checkpoints.length > 0 ? sim.checkpoints[sim.checkpoints.length - 1] : Infinity;
+}
+
+/** Advance the spawn cursor by one chunk — or by a corner/gap when one is due. */
 function spawnAhead(distance: number) {
   const cursorDistance = distance + sim.nextSpawnZ;
-  if (cursorDistance >= sim.nextCornerDistance) {
-    sim.corners.push({
-      z: sim.nextSpawnZ + CORNER_CLEAR_BEFORE,
-      dir: Math.random() > 0.5 ? 1 : -1,
-      consumed: false
-    });
-    sim.nextSpawnZ += CORNER_CLEAR_BEFORE + CORNER_CLEAR_AFTER;
-    sim.nextCornerDistance += CORNER_MIN_GAP + Math.random() * (CORNER_MAX_GAP - CORNER_MIN_GAP);
+
+  // keep a clear runway around every checkpoint gate and after the finish
+  for (const cp of sim.checkpoints) {
+    if (cursorDistance > cp - CHECKPOINT_CLEAR_BEFORE - 26 && cursorDistance < cp + CHECKPOINT_CLEAR_AFTER) {
+      sim.nextSpawnZ = cp + CHECKPOINT_CLEAR_AFTER - distance;
+      return;
+    }
+  }
+  if (cursorDistance > courseEnd() - 30) {
+    sim.nextSpawnZ += 30; // empty victory runway past the finish line
     return;
+  }
+
+  if (cursorDistance >= sim.nextCornerDistance) {
+    sim.nextCornerDistance += CORNER_MIN_GAP + Math.random() * (CORNER_MAX_GAP - CORNER_MIN_GAP);
+    // corners never land near a checkpoint gate or the finish
+    const nearCheckpoint = sim.checkpoints.some((cp) => Math.abs(cursorDistance - cp) < 60);
+    if (!nearCheckpoint) {
+      sim.corners.push({
+        z: sim.nextSpawnZ + CORNER_CLEAR_BEFORE,
+        dir: Math.random() > 0.5 ? 1 : -1,
+        consumed: false
+      });
+      sim.nextSpawnZ += CORNER_CLEAR_BEFORE + CORNER_CLEAR_AFTER;
+      return;
+    }
+    // fall through to a normal chunk when suppressed
   }
   sim.nextSpawnZ += spawnChunk({
     z: sim.nextSpawnZ,
@@ -357,6 +401,19 @@ export function stepSim(dt: number): boolean {
   const prevBase = Math.min(MULTIPLIER_CAP, 1 + Math.floor(prevDistance / MULTIPLIER_STEP));
   sim.multiplier = baseMultiplier + (p.doubleCoins > 0 ? 2 : 0) + (p.speedBoost > 0 ? 2 : 0);
   if (baseMultiplier > prevBase) sim.events.push({ type: 'milestone', multiplier: sim.multiplier });
+
+  // campaign checkpoints + finish line
+  if (sim.nextCheckpointIndex < sim.checkpoints.length && sim.distance >= sim.checkpoints[sim.nextCheckpointIndex]) {
+    const index = sim.nextCheckpointIndex;
+    sim.nextCheckpointIndex += 1;
+    if (index === sim.checkpoints.length - 1) {
+      // crossed the finish line — world complete!
+      sim.events.push({ type: 'finish' });
+      sim.running = false;
+      return true;
+    }
+    sim.events.push({ type: 'checkpoint', index });
+  }
 
   // goals
   if (sim.nextGoalIndex < GOALS.length && sim.distance >= GOALS[sim.nextGoalIndex]) {

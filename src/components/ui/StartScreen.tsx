@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Play, Settings, ShoppingBag, UserRound } from 'lucide-react';
+import { Infinity as InfinityIcon, Map, Settings, ShoppingBag, UserRound } from 'lucide-react';
 import { formatMeters, formatNumber } from '../../game/math';
 import { useRunnerStore } from '../../game/runnerStore';
 
@@ -28,14 +28,18 @@ export function StartScreen() {
         <motion.button
           className="primary-button"
           type="button"
-          onClick={startRun}
+          onClick={() => setActivePanel('worlds')}
           whileTap={{ scale: 0.96 }}
           animate={{ boxShadow: ['0 0 28px rgba(255,191,63,0.45)', '0 0 52px rgba(255,191,63,0.8)', '0 0 28px rgba(255,191,63,0.45)'] }}
           transition={{ repeat: Infinity, duration: 1.8 }}
         >
-          <Play size={26} fill="currentColor" />
-          Run
+          <Map size={26} />
+          World Tour
         </motion.button>
+        <button className="glass-button full marathon-button" type="button" onClick={() => startRun('marathon')}>
+          <InfinityIcon size={20} />
+          Marathon (Endless)
+        </button>
         <div className="menu-buttons">
           <button className="glass-button" type="button" onClick={() => setActivePanel('characters')}>
             <UserRound size={18} />

@@ -1,4 +1,4 @@
-import type { CharacterDefinition, ObstacleDefinition, ObstacleKind, PowerupTimers } from './types';
+import type { CharacterDefinition, ObstacleDefinition, ObstacleKind, PowerupTimers, WorldDefinition } from './types';
 
 /**
  * Camera looks down +Z, so +X is SCREEN-LEFT. Index 0 = screen-left lane,
@@ -61,6 +61,28 @@ export const TURN_BONUS = 100;
 /** clear runway reserved around a corner (no obstacles/coins) */
 export const CORNER_CLEAR_BEFORE = 8;
 export const CORNER_CLEAR_AFTER = 22;
+
+/**
+ * Campaign (World Tour): each world is a designed course with checkpoint
+ * gates. Crash with lives left = respawn at the last checkpoint.
+ */
+export const CAMPAIGN_LIVES = 3;
+/** checkpoint distances; the last entry is the finish line */
+export const WORLD1_CHECKPOINTS = [600, 1250, 2000];
+/** clear runway around each checkpoint gate */
+export const CHECKPOINT_CLEAR_BEFORE = 8;
+export const CHECKPOINT_CLEAR_AFTER = 14;
+/** coins needed inside a section for its 2nd star */
+export const SECTION_COIN_STAR = 40;
+export const RESPAWN_DELAY_MS = 1600;
+
+export const WORLDS: WorldDefinition[] = [
+  { id: 1, name: 'Burger Factory', tagline: 'Where it all began', accent: '#ff9a1f', icon: '🍔', available: true },
+  { id: 2, name: 'Freezer Frontier', tagline: 'Slippery when frozen', accent: '#24d6ff', icon: '🍦', available: false },
+  { id: 3, name: 'Pizza Inferno', tagline: 'Extra hot, extra crispy', accent: '#ff3b2a', icon: '🍕', available: false },
+  { id: 4, name: 'Sushi Dojo', tagline: 'Honor the roll', accent: '#67ff72', icon: '🍣', available: false },
+  { id: 5, name: 'Candy Kingdom', tagline: 'Sweet, sticky doom', accent: '#ff7ad9', icon: '🍭', available: false }
+];
 
 export const EMPTY_POWERUPS: PowerupTimers = {
   magnet: 0,

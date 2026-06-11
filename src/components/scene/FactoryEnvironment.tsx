@@ -638,6 +638,88 @@ function CornerRoom() {
   );
 }
 
+/* ------------------------- checkpoint gates ------------------------ */
+
+const GATE_SLOTS = 2;
+
+function CheckpointGates() {
+  const slotRefs = useRef<(THREE.Group | null)[]>([]);
+  const bendScratch = useRef<BendOut>({ x: 0, z: 0, yaw: 0 });
+
+  const mats = useMemo(
+    () => ({
+      post: new THREE.MeshStandardMaterial({ color: '#1c2430', metalness: 0.8, roughness: 0.3 }),
+      glow: new THREE.MeshStandardMaterial({ color: '#67ff72', emissive: '#3dff52', emissiveIntensity: 2.6 }),
+      finishGlow: new THREE.MeshStandardMaterial({ color: '#ffd84d', emissive: '#ffc41f', emissiveIntensity: 2.8 })
+    }),
+    []
+  );
+
+  useFrame((state) => {
+    // show a gate for each upcoming checkpoint within the horizon
+    let slot = 0;
+    const t = state.clock.elapsedTime;
+    for (let i = sim.nextCheckpointIndex; i < sim.checkpoints.length && slot < GATE_SLOTS; i += 1) {
+      const z = sim.checkpoints[i] - sim.distance;
+      if (z < -10 || z > 130) continue;
+      const group = slotRefs.current[slot];
+      if (!group) continue;
+      const bend = bendPoint(0, z, bendScratch.current);
+      group.visible = true;
+      group.position.set(bend.x, 0, bend.z);
+      group.rotation.y = bend.yaw;
+      const isFinish = i === sim.checkpoints.length - 1;
+      group.traverse((obj) => {
+        const tag = (obj.userData as { gate?: string }).gate;
+        if (tag === 'checkpoint') obj.visible = !isFinish;
+        if (tag === 'finish') obj.visible = isFinish;
+        if (tag === 'beam') obj.scale.y = 1 + Math.sin(t * 5) * 0.08;
+      });
+      slot += 1;
+    }
+    for (; slot < GATE_SLOTS; slot += 1) {
+      const group = slotRefs.current[slot];
+      if (group) group.visible = false;
+    }
+  });
+
+  return (
+    <group>
+      {Array.from({ length: GATE_SLOTS }, (_, i) => (
+        <group key={i} visible={false} ref={(el) => (slotRefs.current[i] = el)}>
+          {/* posts */}
+          {[-4.6, 4.6].map((x) => (
+            <mesh key={x} material={mats.post} position={[x, 2.6, 0]}>
+              <boxGeometry args={[0.6, 5.6, 0.6]} />
+            </mesh>
+          ))}
+          {/* header */}
+          <mesh material={mats.post} position={[0, 5.6, 0]}>
+            <boxGeometry args={[9.9, 0.9, 0.7]} />
+          </mesh>
+          {/* glowing beam across the track */}
+          <mesh userData={{ gate: 'beam' }} material={mats.glow} position={[0, 5.05, 0.1]}>
+            <boxGeometry args={[9.4, 0.12, 0.12]} />
+          </mesh>
+          <group userData={{ gate: 'checkpoint' }}>
+            <Text position={[0, 5.62, -0.4]} rotation={[0, Math.PI, 0]} fontSize={0.62} anchorX="center" anchorY="middle" color="#9dffac" outlineWidth={0.035} outlineColor="#05140a">
+              CHECKPOINT
+            </Text>
+          </group>
+          <group userData={{ gate: 'finish' }} visible={false}>
+            <Text position={[0, 5.62, -0.4]} rotation={[0, Math.PI, 0]} fontSize={0.72} anchorX="center" anchorY="middle" color="#ffe58a" outlineWidth={0.04} outlineColor="#140e02">
+              ★ FINISH ★
+            </Text>
+            <mesh material={mats.finishGlow} position={[0, 4.6, 0.1]}>
+              <boxGeometry args={[9.4, 0.12, 0.12]} />
+            </mesh>
+          </group>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 /* --------------------------- environment --------------------------- */
 
 export function FactoryEnvironment() {
@@ -685,6 +767,7 @@ export function FactoryEnvironment() {
       ))}
       <WallLights />
       <CornerRoom />
+      <CheckpointGates />
     </group>
   );
 }

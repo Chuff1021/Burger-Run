@@ -216,6 +216,176 @@ button:disabled {
   filter: drop-shadow(0 0 6px rgba(255, 216, 77, 0.7));
 }
 
+/* ---- campaign: lives, worlds, respawn ---- */
+
+.lives-row {
+  display: flex;
+  gap: 5px;
+  padding: 4px 2px;
+  color: #ff5a4a;
+  filter: drop-shadow(0 0 8px rgba(255, 59, 42, 0.7));
+}
+
+.world-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.world-card {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(10, 13, 19, 0.92), color-mix(in srgb, var(--accent) 10%, rgba(18, 23, 33, 0.8)));
+  color: #fff3cf;
+}
+
+.world-card.locked {
+  filter: saturate(0.25) brightness(0.7);
+}
+
+.world-card.cleared {
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.world-icon {
+  font-size: 2.2rem;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 70%, transparent));
+}
+
+.world-card strong {
+  font: 400 1.05rem 'Titan One', sans-serif;
+  color: var(--accent);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.world-card small {
+  color: #b7c6d4;
+  font-size: 0.78rem;
+}
+
+.world-stars {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+  font: 700 0.85rem Rajdhani, sans-serif;
+}
+
+.world-stars em {
+  margin-left: 4px;
+  padding: 2px 7px;
+  color: #06140a;
+  background: #67ff72;
+  border-radius: 4px;
+  font: 700 0.62rem Rajdhani, sans-serif;
+  font-style: normal;
+  letter-spacing: 0.1em;
+}
+
+.world-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  padding: 9px 18px;
+  color: #1d0d02;
+  border-radius: 8px;
+  background: linear-gradient(150deg, #ffe58a, var(--accent));
+  font: 400 0.9rem 'Titan One', sans-serif;
+  letter-spacing: 0.04em;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.world-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  color: #8b97a8;
+  font: 700 0.8rem Rajdhani, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.marathon-button {
+  letter-spacing: 0.08em;
+}
+
+.respawn-overlay {
+  display: grid;
+  place-items: center;
+  background: rgba(4, 6, 10, 0.55);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+}
+
+.respawn-card {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 26px 36px;
+  border: 1px solid rgba(255, 91, 74, 0.6);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 0 38px rgba(255, 59, 42, 0.4);
+}
+
+.respawn-card strong {
+  color: var(--gold);
+  font: 400 clamp(1.3rem, 5vw, 2rem) 'Titan One', sans-serif;
+  text-shadow: 0 3px 0 rgba(122, 53, 8, 0.9), 0 0 22px rgba(255, 191, 63, 0.6);
+}
+
+.respawn-hearts {
+  display: flex;
+  gap: 10px;
+  color: #ff5a4a;
+  filter: drop-shadow(0 0 10px rgba(255, 59, 42, 0.8));
+}
+
+.respawn-hearts .lost {
+  opacity: 0.3;
+}
+
+.respawn-card span {
+  color: #cfd8e3;
+  font: 700 0.95rem Rajdhani, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.section-stars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.section-stars article {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 10px;
+  border: 1px solid rgba(255, 216, 77, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 191, 63, 0.06);
+}
+
+.section-stars span {
+  color: var(--cyan-soft);
+  font: 700 0.7rem Rajdhani, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.boss-tease b {
+  color: #ff8d7a;
+}
+
 /* ---- turn banner ---- */
 
 .turn-banner {

@@ -1,5 +1,5 @@
-import { ArrowBigLeft, ArrowBigRight, Magnet, Pause, Shield, Star, Zap } from 'lucide-react';
-import { POWERUP_DURATION } from '../../game/constants';
+import { ArrowBigLeft, ArrowBigRight, Heart, Magnet, Pause, Shield, Star, Zap } from 'lucide-react';
+import { CAMPAIGN_LIVES, POWERUP_DURATION } from '../../game/constants';
 import { formatMeters, formatNumber } from '../../game/math';
 import { useRunnerStore } from '../../game/runnerStore';
 import type { PowerupType } from '../../game/types';
@@ -30,9 +30,13 @@ export function HUD() {
   const toasts = useRunnerStore((state) => state.toasts);
   const cornerDir = useRunnerStore((state) => state.cornerDir);
   const cornerDist = useRunnerStore((state) => state.cornerDist);
+  const playMode = useRunnerStore((state) => state.playMode);
+  const lives = useRunnerStore((state) => state.lives);
+  const nextCheckpoint = useRunnerStore((state) => state.nextCheckpoint);
   const pause = useRunnerStore((state) => state.pause);
 
   if (status === 'menu') return null;
+  const campaign = playMode === 'campaign';
 
   return (
     <section className="hud-layer" aria-label="Game HUD">
@@ -50,6 +54,13 @@ export function HUD() {
           <span>Coins</span>
           <strong>{formatNumber(runCoins)}</strong>
         </article>
+        {campaign && (
+          <div className="lives-row" aria-label={`${lives} lives left`}>
+            {Array.from({ length: CAMPAIGN_LIVES }, (_, i) => (
+              <Heart key={i} size={22} fill={i < lives ? 'currentColor' : 'none'} opacity={i < lives ? 1 : 0.35} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ---- top-right: multiplier + pause ---- */}
@@ -63,10 +74,10 @@ export function HUD() {
         </button>
       </div>
 
-      {/* ---- right: next goal panel ---- */}
+      {/* ---- right: next goal / checkpoint panel ---- */}
       <article className="mission-card">
-        <span>Next Goal</span>
-        <strong>{formatMeters(nextGoal)}</strong>
+        <span>{campaign ? 'Checkpoint' : 'Next Goal'}</span>
+        <strong>{campaign ? formatMeters(Math.max(0, nextCheckpoint - distance)) : formatMeters(nextGoal)}</strong>
         <div className="goal-stars">
           {[0, 1, 2].map((i) => (
             <Star key={i} size={17} fill={i < Math.min(3, goalsHit) ? 'currentColor' : 'none'} />

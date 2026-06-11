@@ -5,9 +5,12 @@ import { CharacterSelect } from '../components/ui/CharacterSelect';
 import { GameOverScreen } from '../components/ui/GameOverScreen';
 import { HUD } from '../components/ui/HUD';
 import { PauseMenu } from '../components/ui/PauseMenu';
+import { RespawnOverlay } from '../components/ui/RespawnOverlay';
 import { SettingsPanel } from '../components/ui/SettingsPanel';
 import { ShopPanel } from '../components/ui/ShopPanel';
 import { StartScreen } from '../components/ui/StartScreen';
+import { WorldCompleteScreen } from '../components/ui/WorldCompleteScreen';
+import { WorldMapPanel } from '../components/ui/WorldMapPanel';
 import { useRunnerStore } from '../game/runnerStore';
 import { useRunnerInput } from './useRunnerInput';
 
@@ -35,10 +38,13 @@ export default function GameShell() {
       <HUD />
       {status === 'menu' && <StartScreen />}
       {status === 'paused' && <PauseMenu />}
+      {status === 'respawn' && <RespawnOverlay />}
+      {status === 'worldComplete' && <WorldCompleteScreen />}
       {status === 'gameOver' && <GameOverScreen />}
       {activePanel === 'characters' && <CharacterSelect />}
       {activePanel === 'shop' && <ShopPanel />}
       {activePanel === 'settings' && <SettingsPanel />}
+      {activePanel === 'worlds' && <WorldMapPanel />}
     </main>
   );
 }
