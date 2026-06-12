@@ -4,7 +4,6 @@ import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@re
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { boss } from '../../game/bossSim';
-import { CHARACTER_ROSTER } from '../../game/constants';
 import { sim } from '../../game/engine';
 import { BossArena } from './BossArena';
 // (corner state is read straight off the sim inside useFrame)
@@ -14,7 +13,7 @@ import { Effects } from './Effects';
 import { FactoryEnvironment } from './FactoryEnvironment';
 import { FactoryTrack } from './FactoryTrack';
 import { Obstacles } from './Obstacles';
-import { PlayerBurger } from './PlayerBurger';
+import { FryBoyRunner } from './FryBoyRunner';
 import { Powerups } from './Powerups';
 
 const CAMERA_TARGET = new THREE.Vector3();
@@ -166,12 +165,7 @@ function KitchenEnvironment() {
 }
 
 export function BurgerRunnerScene() {
-  const selectedCharacter = useRunnerStore((state) => state.save.selectedCharacter);
   const inBossFight = useRunnerStore((state) => state.status === 'boss' || state.status === 'bossDefeat');
-  const character = useMemo(
-    () => CHARACTER_ROSTER.find((item) => item.id === selectedCharacter) ?? CHARACTER_ROSTER[0],
-    [selectedCharacter]
-  );
 
   return (
     <>
@@ -199,7 +193,7 @@ export function BurgerRunnerScene() {
           <Effects />
         </>
       )}
-      {!inBossFight && <PlayerBurger character={character} />}
+      {!inBossFight && <FryBoyRunner />}
       {inBossFight && <BossArena />}
       <PostFX />
     </>

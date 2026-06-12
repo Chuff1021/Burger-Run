@@ -4,32 +4,84 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { boss } from '../../game/bossSim';
 import { sim } from '../../game/engine';
+import { FighterRig, type RigIntent } from './FighterRig';
 import { glowStreakTexture } from './textures';
 
-useGLTF.preload('/models/manager_boss.glb');
-useGLTF.preload('/models/fry_boy.glb');
+useGLTF.preload('/models/hero_rig.glb');
+useGLTF.preload('/models/manager_rig.glb');
 useGLTF.preload('/models/bottle-ketchup.glb');
 
 const FX_SLOTS = 12;
 
-/** Normalizes a GLB to a target height standing on y=0, returns a clone. */
-function useFighterModel(url: string, height: number): THREE.Group {
-  const { scene } = useGLTF(url);
-  return useMemo(() => {
-    const clone = scene.clone(true);
-    const box = new THREE.Box3().setFromObject(clone);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const s = height / size.y;
-    clone.scale.setScalar(s);
-    const box2 = new THREE.Box3().setFromObject(clone);
-    clone.position.y = -box2.min.y;
-    const center = new THREE.Vector3();
-    box2.getCenter(center);
-    clone.position.x = -center.x;
-    clone.position.z = -center.z;
-    return clone;
-  }, [scene, height]);
+const HERO_CLIPS = {
+  punch: '/models/anim/hero_Kung_Fu_Punch.glb',
+  combo: '/models/anim/hero_Punch_Combo_5.glb',
+  uppercut: '/models/anim/hero_360_Power_Spin_Jump.glb',
+  special: '/models/anim/hero_Backflip_Sweep_Kick.glb',
+  block: '/models/anim/hero_Block3.glb',
+  walk: '/models/anim/hero_Walking.glb'
+};
+
+const MANAGER_CLIPS = {
+  jab1: '/models/anim/manager_Right_Jab_from_Guard.glb',
+  jab2: '/models/anim/manager_Left_Jab_from_Guard.glb',
+  knee: '/models/anim/manager_Boxing_Guard_Step_Knee_Strike.glb',
+  hook: '/models/anim/manager_Left_Hook_from_Guard.glb',
+  upper: '/models/anim/manager_Left_Uppercut_from_Guard.glb',
+  kick: '/models/anim/manager_Double_kick_forward.glb',
+  walk: '/models/anim/manager_Walking.glb'
+};
+
+/** maps the player fighter state to an animation intent */
+function heroDriver(): RigIntent {
+  switch (boss.pState) {
+    case 'attack':
+      return boss.pString < 2
+        ? { clip: 'punch', nonce: boss.pString, loop: false, speed: 2.2 }
+        : { clip: 'combo', loop: false, speed: 1.8 };
+    case 'uppercut':
+      return { clip: 'uppercut', loop: false, speed: 1.45 };
+    case 'special':
+      return { clip: 'special', loop: false, speed: 1.5 };
+    case 'block':
+      return { clip: 'block', loop: false, speed: 1.3 };
+    case 'duck':
+      return { clip: 'block', loop: false, speed: 1.6 };
+    case 'walk':
+      return { clip: 'walk', speed: 1.6 };
+    case 'hitstun':
+    case 'knockdown':
+    case 'throw':
+      return { clip: 'walk', paused: true };
+    default:
+      return { clip: 'walk', speed: 0.5 }; // bouncing fight stance
+  }
+}
+
+/** maps the boss AI state to an animation intent */
+function managerDriver(): RigIntent {
+  if (boss.phase === 'finisher' || boss.phase === 'victory' || boss.phase === 'finishHim') {
+    return { clip: 'walk', paused: true };
+  }
+  switch (boss.bState) {
+    case 'attack': {
+      const clip = (['jab1', 'jab2', 'knee'] as const)[boss.bString] ?? 'jab1';
+      return { clip, nonce: boss.bString, loop: false, speed: 1.1 };
+    }
+    case 'special':
+      return { clip: 'upper', loop: false, speed: 1.0 };
+    case 'throw':
+      return { clip: 'kick', loop: false, speed: 1.2 };
+    case 'walk':
+      return { clip: 'walk', speed: 1.3 };
+    case 'hitstun':
+    case 'knockdown':
+      return { clip: 'walk', paused: true };
+    case 'block':
+      return { clip: 'walk', paused: true };
+    default:
+      return { clip: 'walk', speed: 0.45 };
+  }
 }
 
 /**
@@ -45,8 +97,6 @@ export function BossArena() {
   const fxRefs = useRef<(THREE.Sprite | null)[]>([]);
   const flameRefs = useRef<(THREE.Mesh | null)[]>([]);
 
-  const heroModel = useFighterModel('/models/fry_boy.glb', 2.1);
-  const bossModel = useFighterModel('/models/manager_boss.glb', 3.1);
   const bottle = useGLTF('/models/bottle-ketchup.glb');
   const projModel = useMemo(() => bottle.scene.clone(true), [bottle]);
   const pano = useLoader(THREE.TextureLoader, '/hdri/burger_factory_pano.jpg');
@@ -260,7 +310,7 @@ export function BossArena() {
       {/* ---------------- fighters ---------------- */}
       <group ref={heroRoot}>
         <group ref={heroBody}>
-          <primitive object={heroModel} />
+          <FighterRig rigUrl="/models/hero_rig.glb" clips={HERO_CLIPS} height={2.1} driver={heroDriver} />
           <mesh material={mats.heroFlash} position={[0, 1.1, 0]} scale={1.15}>
             <sphereGeometry args={[1.1, 12, 10]} />
           </mesh>
@@ -268,7 +318,7 @@ export function BossArena() {
       </group>
       <group ref={bossRoot}>
         <group ref={bossBody}>
-          <primitive object={bossModel} />
+          <FighterRig rigUrl="/models/manager_rig.glb" clips={MANAGER_CLIPS} height={3.1} driver={managerDriver} />
           <mesh material={mats.bossFlash} position={[0, 1.6, 0]} scale={1.2}>
             <sphereGeometry args={[1.6, 12, 10]} />
           </mesh>
