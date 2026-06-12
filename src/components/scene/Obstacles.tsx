@@ -1,4 +1,4 @@
-import { Text } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -13,6 +13,33 @@ import { cautionStripeTexture } from './textures';
  * kind's slots and everything else is hidden. This removes the GPU
  * geometry-upload stalls that React mount/unmount caused on every spawn.
  */
+
+const OBSTACLE_MODELS: Record<ObstacleKind, string> = {
+  meatRoller: '/models/obstacles/meat_roller.glb',
+  hotCrate: '/models/obstacles/hot_crate.glb',
+  grillFlame: '/models/obstacles/flame_grill.glb',
+  sauceGate: '/models/obstacles/sauce_gate.glb',
+  pressArm: '/models/obstacles/spatula_press.glb'
+};
+for (const url of Object.values(OBSTACLE_MODELS)) useGLTF.preload(url);
+
+/** Normalizes a Meshy GLB: scale so the chosen axis hits target, grounded at y=0, centered. */
+function useObstacleModel(kind: ObstacleKind, target: number, axis: 'x' | 'y' = 'y'): THREE.Group {
+  const { scene } = useGLTF(OBSTACLE_MODELS[kind]);
+  return useMemo(() => {
+    const clone = scene.clone(true);
+    const box = new THREE.Box3().setFromObject(clone);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const s = target / (axis === 'y' ? size.y : size.x);
+    clone.scale.setScalar(s);
+    const box2 = new THREE.Box3().setFromObject(clone);
+    const center = new THREE.Vector3();
+    box2.getCenter(center);
+    clone.position.set(-center.x, -box2.min.y, -center.z);
+    return clone;
+  }, [scene, target, axis, kind]);
+}
 
 const POOL_SIZES: Record<ObstacleKind, number> = {
   meatRoller: 9,
@@ -71,163 +98,81 @@ function useObstacleMats(): ObstacleMats {
   );
 }
 
-/* ----------------------- obstacle models ----------------------- */
+/* ----------------------- obstacle models (Meshy GLBs) ----------------------- */
 
-/** Spiked meat roller — big as a barrel, jump over it. */
+/** Spiked meat roller — jump over it. The whole model spins like a grinder. */
 function MeatRollerModel({ mats }: { mats: ObstacleMats }) {
-  const spikes = useMemo(() => {
-    const list: { pos: [number, number, number]; rot: [number, number, number] }[] = [];
-    for (let ring = 0; ring < 4; ring += 1) {
-      const x = (ring - 1.5) * 0.56;
-      for (let i = 0; i < 8; i += 1) {
-        const a = (i / 8) * Math.PI * 2 + ring * 0.4;
-        list.push({ pos: [x, Math.sin(a) * 0.66, Math.cos(a) * 0.66], rot: [a + Math.PI / 2, 0, 0] });
-      }
-    }
-    return list;
-  }, []);
+  const model = useObstacleModel('meatRoller', 2.3, 'x');
   return (
     <group>
-      <group userData={{ anim: 'spin' }} position={[0, 0.68, 0]}>
-        <mesh material={mats.rollerMeat} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.68, 0.68, 2.2, 18]} />
-        </mesh>
-        {spikes.map((s, i) => (
-          <mesh key={i} material={mats.spike} position={s.pos} rotation={s.rot}>
-            <coneGeometry args={[0.09, 0.38, 5]} />
-          </mesh>
-        ))}
+      <group userData={{ anim: 'spin' }} position={[0, 0.7, 0]}>
+        <group position={[0, -0.7, 0]}>
+          <primitive object={model} />
+        </group>
       </group>
-      {[-1.18, 1.18].map((x) => (
-        <mesh key={x} material={mats.rollerCore} position={[x, 0.68, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.32, 0.32, 0.2, 10]} />
-        </mesh>
-      ))}
+      {/* menace glow under the spikes */}
+      <mesh material={mats.flameOuter} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]}>
+        <ringGeometry args={[0.2, 0.9, 18]} />
+      </mesh>
     </group>
   );
 }
 
-/** Hot fryer crate — full lane-blocker, taller than a jump. Change lanes! */
+/** Hot fryer cabinet — full lane-blocker. Fire animates on top. */
 function HotCrateModel({ mats }: { mats: ObstacleMats }) {
+  const model = useObstacleModel('hotCrate', 1.95, 'y');
   return (
     <group>
-      <mesh material={mats.crate} position={[0, 0.95, 0]}>
-        <boxGeometry args={[2.1, 1.9, 1.6]} />
-      </mesh>
-      {/* caution stripe bands wrapping the crate */}
-      <mesh material={mats.crateStripe} position={[0, 1.68, 0]}>
-        <boxGeometry args={[2.14, 0.28, 1.64]} />
-      </mesh>
-      <mesh material={mats.crateStripe} position={[0, 0.2, 0]}>
-        <boxGeometry args={[2.14, 0.28, 1.64]} />
-      </mesh>
-      <mesh material={mats.crateGlow} position={[0, 1.92, 0]}>
-        <boxGeometry args={[2.0, 0.07, 1.5]} />
-      </mesh>
-      {/* fire licking off the top — flicker tags reuse the flame animator */}
-      <mesh userData={{ anim: 'flameA' }} material={mats.flameOuter} position={[-0.4, 2.45, 0]}>
+      <primitive object={model} />
+      <mesh userData={{ anim: 'flameA' }} material={mats.flameOuter} position={[-0.35, 2.4, 0]}>
         <coneGeometry args={[0.45, 1.1, 9]} />
       </mesh>
-      <mesh userData={{ anim: 'flameB' }} material={mats.flameInner} position={[0.45, 2.3, 0.15]}>
+      <mesh userData={{ anim: 'flameB' }} material={mats.flameInner} position={[0.4, 2.25, 0.12]}>
         <coneGeometry args={[0.3, 0.8, 7]} />
       </mesh>
-      <Text position={[0, 1.05, -0.83]} rotation={[0, Math.PI, 0]} fontSize={0.26} anchorX="center" anchorY="middle" color="#ffd84d" outlineWidth={0.016} outlineColor="#000000" textAlign="center">
-        {'CAUTION\nHOT SURFACE'}
-      </Text>
     </group>
   );
 }
 
+/** Flame grill vent — jump the fire. */
 function GrillFlameModel({ mats }: { mats: ObstacleMats }) {
+  const model = useObstacleModel('grillFlame', 2.35, 'x');
   return (
     <group>
-      <mesh material={mats.grate} position={[0, 0.1, 0]}>
-        <boxGeometry args={[2.3, 0.22, 1.5]} />
-      </mesh>
-      <mesh material={mats.warn} position={[0, 0.23, -0.65]}>
-        <boxGeometry args={[2.1, 0.05, 0.1]} />
-      </mesh>
-      <mesh userData={{ anim: 'flameA' }} material={mats.flameOuter} position={[0, 1.05, 0]}>
+      <primitive object={model} />
+      <mesh userData={{ anim: 'flameA' }} material={mats.flameOuter} position={[0, 1.0, 0]}>
         <coneGeometry args={[0.75, 1.8, 11]} />
       </mesh>
-      <mesh userData={{ anim: 'flameB' }} material={mats.flameInner} position={[0, 0.85, 0]}>
+      <mesh userData={{ anim: 'flameB' }} material={mats.flameInner} position={[0, 0.8, 0]}>
         <coneGeometry args={[0.45, 1.3, 9]} />
       </mesh>
     </group>
   );
 }
 
-/**
- * Sauce pipe — SLIDE UNDER. A fat ketchup pipe spanning the whole lane at
- * head height with sauce dripping off it; the open gap underneath reads
- * instantly as "duck here".
- */
+/** Sauce pipe gate — slide under the pipe. */
 function SauceGateModel({ mats }: { mats: ObstacleMats }) {
+  const model = useObstacleModel('sauceGate', 2.35, 'y');
   return (
     <group>
-      {/* chunky side posts */}
-      {[-1.18, 1.18].map((x) => (
-        <mesh key={x} material={mats.gateFrame} position={[x, 1.05, 0]}>
-          <boxGeometry args={[0.34, 2.1, 0.4]} />
-        </mesh>
-      ))}
-      {/* the fat sauce pipe — head height, full lane width */}
-      <mesh material={mats.rollerMeat} position={[0, 1.72, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.34, 0.34, 2.65, 16]} />
-      </mesh>
-      {/* valve wheel on top */}
-      <mesh material={mats.spike} position={[0, 2.16, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.22, 0.05, 8, 16]} />
-      </mesh>
-      {/* sauce drips hanging into the gap */}
-      {[-0.7, -0.15, 0.45, 0.95].map((x, i) => (
-        <mesh key={x} material={mats.gateBeam} position={[x, 1.36 - (i % 2) * 0.14, 0]}>
-          <cylinderGeometry args={[0.07, 0.045, 0.34 + (i % 2) * 0.18, 6]} />
-        </mesh>
-      ))}
-      {/* glowing red underside — the danger edge you slide beneath */}
-      <mesh material={mats.warn} position={[0, 1.38, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.06, 0.06, 2.5, 8]} />
+      <primitive object={model} />
+      {/* glowing red underside marks the duck line */}
+      <mesh material={mats.gateBeam} position={[0, 1.36, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.05, 0.05, 2.4, 8]} />
       </mesh>
     </group>
   );
 }
 
-/**
- * Spatula press — SLIDE UNDER. A giant steel spatula blade hangs from a
- * gantry down to head height, bobbing; clear floor gap below.
- */
+/** Spatula press — slide under the hanging blade. */
 function PressArmModel({ mats }: { mats: ObstacleMats }) {
+  const model = useObstacleModel('pressArm', 2.7, 'y');
   return (
     <group>
-      {/* overhead gantry */}
-      <mesh material={mats.gateFrame} position={[0, 2.5, 0]}>
-        <boxGeometry args={[2.6, 0.3, 0.5]} />
+      <primitive object={model} />
+      <mesh material={mats.gateBeam} position={[0, 1.3, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.04, 0.04, 2.3, 8]} />
       </mesh>
-      {[-1.22, 1.22].map((x) => (
-        <mesh key={x} material={mats.gateFrame} position={[x, 1.3, 0]}>
-          <boxGeometry args={[0.26, 2.6, 0.34]} />
-        </mesh>
-      ))}
-      <group userData={{ anim: 'pad' }} position={[0, 2.0, 0]}>
-        {/* handle shaft */}
-        <mesh material={mats.armMetal} position={[0, 0.45, 0]}>
-          <cylinderGeometry args={[0.14, 0.14, 0.9, 8]} />
-        </mesh>
-        {/* the giant blade — full lane width, slotted like a real spatula */}
-        <mesh material={mats.spike} position={[0, -0.42, 0]}>
-          <boxGeometry args={[2.3, 0.85, 0.14]} />
-        </mesh>
-        {[-0.55, 0, 0.55].map((x) => (
-          <mesh key={x} material={mats.gateFrame} position={[x, -0.42, 0]}>
-            <boxGeometry args={[0.12, 0.65, 0.16]} />
-          </mesh>
-        ))}
-        {/* red-hot bottom edge */}
-        <mesh material={mats.warn} position={[0, -0.88, 0]}>
-          <boxGeometry args={[2.34, 0.1, 0.18]} />
-        </mesh>
-      </group>
     </group>
   );
 }
