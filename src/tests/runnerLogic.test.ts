@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { boss, bossJump, bossSlide, bossTap, STAGE_MAX_X, startBoss, stepBoss } from '../game/bossSim';
+import { boss, bossBlockEnd, bossBlockStart, bossFatalBlow, bossJump, bossSlide, bossTap, fatalReady, finishTap, startBoss, stepBoss } from '../game/bossSim';
 import { JUMP_VELOCITY, LANES, LANE_CHANGE_TIME, OBSTACLES, POWERUP_DURATION } from '../game/constants';
 import { bendPoint, jump, moveLane, resetSim, sim, slide, stepSim } from '../game/engine';
 import { resolveSwipeGesture } from '../game/input';
@@ -286,7 +286,7 @@ describe('campaign mode', () => {
   });
 });
 
-describe('boss fight duel', () => {
+describe('MK boss fight', () => {
   function step(seconds: number) {
     let last: 'fighting' | 'won' | 'lost' = 'fighting';
     for (let i = 0; i < Math.ceil(seconds * 60); i += 1) last = stepBoss(1 / 60);
@@ -295,192 +295,117 @@ describe('boss fight duel', () => {
 
   beforeEach(() => {
     startBoss();
-    step(1.32); // through the intro, before the first hit resolves
+    step(2.4); // through ROUND 1 intro
   });
 
-  it('starts the first attack round after the intro', () => {
-    expect(['attack', 'recovery']).toContain(boss.phase);
-    expect(boss.hp).toBe(3);
-    expect(boss.hearts).toBe(3);
-    expect(boss.percent).toBe(0);
+  it('round 1 opens with full health bars', () => {
+    expect(boss.phase).toBe('fight');
+    expect(boss.playerHP).toBe(100);
+    expect(boss.bossHP).toBe(100);
+    expect(boss.round).toBe(1);
   });
 
-  it('early counter hits interrupt a boss telegraph', () => {
-    boss.phase = 'attack';
-    boss.attack = null;
-    stepBoss(1 / 60); // boss starts an attack
-    expect(boss.attack).not.toBeNull();
-    sim.laneX = boss.bossX + 2; // in range
-    bossTap();
-    step(0.12); // through startup
-    expect(boss.percent).toBeGreaterThan(0); // damage lands mid-attack
-    expect(boss.hitstopT).toBeGreaterThan(0); // hitstop applied
-    expect(boss.bossStunT).toBeGreaterThan(0); // and he is in hitstun
-    expect(boss.phase).toBe('recovery');
-  });
-
-  it('swinging into an armored active attack clanks instead of free damage', () => {
-    boss.phase = 'attack';
-    boss.attack = {
-      type: 'slam',
-      zoneX: sim.laneX,
-      telegraph: 1,
-      t: 0.75,
-      resolved: false,
-      pinX: boss.bossX + 1.5,
-      prevPinX: boss.bossX + 1.5
-    };
+  it('tap string damages the boss and buffered taps chain', () => {
+    boss.bState = 'idle';
+    boss.bCooldown = 99; // freeze AI
     sim.laneX = boss.bossX + 2;
     bossTap();
     step(0.12);
-    expect(boss.percent).toBe(0);
-    expect(boss.combo).toBe(0);
-    expect(boss.events.some((event) => event.type === 'clank')).toBe(true);
-  });
-
-  it('boss attack timer freezes while stunned from a clean punish', () => {
-    boss.phase = 'attack';
-    boss.attack = null;
-    stepBoss(1 / 60);
-    sim.laneX = boss.bossX + 2;
-    bossTap();
-    step(0.12);
-    boss.attack = {
-      type: 'lowSweep',
-      zoneX: sim.laneX,
-      telegraph: 1,
-      t: 0.2,
-      resolved: false,
-      pinX: boss.bossX + 1.5,
-      prevPinX: boss.bossX + 1.5
-    };
-    boss.phase = 'attack';
-    const tBefore = boss.attack.t;
-    boss.hitstopT = 0;
-    stepBoss(1 / 60);
-    expect(boss.attack.t).toBe(tBefore);
-  });
-
-  it('double jump works and landing restores both jumps', () => {
-    expect(bossJump()).toBe(true);
-    expect(bossJump()).toBe(true); // air jump
-    expect(bossJump()).toBe(false); // exhausted
-    while (!sim.grounded) stepBoss(1 / 60);
-    expect(bossJump()).toBe(true);
-  });
-
-  it('punish taps rush into range on mobile', () => {
-    boss.phase = 'recovery';
-    boss.phaseT = 0;
-    sim.laneX = 1.2; // menu-start spacing: visually far, but a valid punish window
-    bossTap();
-    step(0.12);
-    expect(boss.percent).toBeGreaterThan(0);
-    expect(boss.combo).toBe(1);
-  });
-
-  it('attacks beyond rush-assist range still whiff', () => {
-    boss.phase = 'recovery';
-    boss.phaseT = 0;
-    sim.laneX = STAGE_MAX_X;
-    boss.bossX = -10.5;
-    bossTap();
-    step(0.12);
-    expect(boss.percent).toBe(0);
-    expect(boss.combo).toBe(0);
-  });
-
-  it('percent crossing the first threshold launches a pip', () => {
-    boss.phase = 'stagger';
-    boss.phaseT = 0;
-    sim.laneX = boss.bossX + 2;
-    let guard = 0;
-    while (boss.hp === 3 && guard < 40) {
-      boss.phase = 'stagger';
-      boss.phaseT = 0;
-      boss.atkPhase = 'idle';
-      bossTap();
-      step(0.5); // ride through hitstop + attack frames
-      guard += 1;
-    }
-    expect(boss.hp).toBe(2);
-    expect(['launch', 'attack']).toContain(boss.phase as string);
-    expect(boss.timeScale).toBeLessThan(1); // special-zoom slow-mo kicked in
-  });
-
-  it('knockback grows with percent (Smash scaling)', () => {
-    boss.phase = 'stagger';
-    boss.atkPhase = 'idle';
-    sim.laneX = boss.bossX + 2;
-    boss.percent = 0;
-    bossTap();
-    step(0.12);
-    const kbLow = Math.abs(boss.bossVelX);
-    boss.percent = 120;
-    boss.phase = 'stagger';
-    boss.atkPhase = 'idle';
-    boss.hitstopT = 0;
-    sim.laneX = boss.bossX + 2;
-    bossTap();
-    step(0.12);
-    expect(Math.abs(boss.bossVelX)).toBeGreaterThan(kbLow);
-  });
-
-  it('tap buffering chains attacks (160ms buffer)', () => {
-    boss.phase = 'stagger';
-    boss.phaseT = 0;
-    sim.laneX = boss.bossX + 2;
-    bossTap();
-    step(0.1); // mid attack
-    bossTap(); // buffered
-    expect(boss.atkBuffer).toBeGreaterThan(0);
-    step(0.6);
+    const afterOne = boss.bossHP;
+    expect(afterOne).toBeLessThan(100);
+    bossTap(); // buffer the second hit
+    step(0.8);
+    expect(boss.bossHP).toBeLessThan(afterOne);
     expect(boss.combo).toBeGreaterThanOrEqual(2);
   });
 
-  it('standing in attacks costs hearts; zero hearts = defeat', () => {
-    boss.hearts = 1;
-    let guard = 0;
-    while (boss.phase !== 'defeat' && guard < 60 * 30) {
-      stepBoss(1 / 60);
-      guard += 1;
-    }
-    expect(boss.phase).toBe('defeat');
-    expect(step(2)).toBe('lost');
+  it('blocking reduces boss damage to chip', () => {
+    bossBlockStart();
+    expect(boss.pState).toBe('block');
+    const hp = boss.playerHP;
+    // simulate a boss hit landing while blocking
+    boss.bState = 'attack';
+    boss.bString = 0;
+    boss.bStateT = 0;
+    boss.bossX = sim.laneX - 2;
+    step(1.2);
+    const lost = hp - boss.playerHP;
+    expect(lost).toBeGreaterThan(0);
+    expect(lost).toBeLessThanOrEqual(4); // chip, not the full 6+
+    bossBlockEnd();
   });
 
-  it('dodging the big windup staggers the boss', () => {
-    boss.phase = 'windup';
-    boss.phaseT = 0;
-    step(1.32);
+  it('uppercut knocks the boss down', () => {
+    boss.bState = 'idle';
+    boss.bCooldown = 99;
+    sim.laneX = boss.bossX + 1.8;
     bossJump();
     step(0.4);
-    expect(boss.phase).toBe('stagger');
+    expect(boss.bState).toBe('knockdown');
+    expect(boss.bossHP).toBeLessThan(100);
   });
 
-  it('super slam requires full meter and refills a heart', () => {
-    boss.phase = 'stagger';
-    boss.phaseT = 0;
-    boss.meter = 1;
-    boss.hearts = 2;
-    sim.laneX = boss.bossX + 2;
+  it('special needs meter and fires a projectile', () => {
+    boss.meter = 0;
     bossSlide();
-    expect(boss.percent).toBeGreaterThanOrEqual(35);
-    expect(boss.hearts).toBe(3);
-    expect(boss.meter).toBe(0);
+    expect(boss.projX).toBeLessThan(-90); // ducked instead
+    boss.pState = 'idle';
+    boss.meter = 1;
+    bossSlide();
+    expect(boss.projX).toBeGreaterThan(-90);
+    expect(boss.meter).toBeLessThan(1);
   });
 
-  it('third pip launch = victory', () => {
-    boss.hp = 1;
-    boss.percent = 195;
-    boss.phase = 'stagger';
-    boss.phaseT = 0;
+  it('boss AI eventually damages an idle player', () => {
+    for (let i = 0; i < 60 * 25 && boss.playerHP === 100; i += 1) stepBoss(1 / 60);
+    expect(boss.playerHP).toBeLessThan(100);
+  });
+
+  it('KO ends the round; two round wins reach FINISH THE ORDER and victory', () => {
+    boss.bState = 'idle';
+    boss.bCooldown = 999;
+    boss.bossHP = 1;
     sim.laneX = boss.bossX + 2;
     bossTap();
     step(0.3);
-    expect(boss.hp).toBe(0);
-    expect(boss.phase as string).toBe('victory');
-    expect(step(5)).toBe('won');
+    expect(boss.playerWins).toBe(1);
+    expect(boss.phase).toBe('roundEnd');
+    step(4); // round 2 intro
+    expect(boss.round).toBe(2);
+    boss.bState = 'idle';
+    boss.bCooldown = 999;
+    boss.bossHP = 1;
+    sim.laneX = boss.bossX + 2;
+    bossTap();
+    step(0.3);
+    expect(boss.phase).toBe('finishHim');
+    expect(finishTap()).toBe(true);
+    const result = step(6);
+    expect(result).toBe('won');
+  });
+
+  it('two boss round wins = defeat', () => {
+    boss.playerHP = 1;
+    boss.bossWins = 1;
+    boss.bState = 'attack';
+    boss.bString = 0;
+    boss.bStateT = 0;
+    boss.bossX = sim.laneX - 2;
+    let r: 'fighting' | 'won' | 'lost' = 'fighting';
+    for (let i = 0; i < 60 * 8 && r === 'fighting'; i += 1) r = stepBoss(1 / 60);
+    expect(r).toBe('lost');
+  });
+
+  it('fatal blow arms under 30% HP with full meter and fires once', () => {
+    boss.playerHP = 25;
+    boss.meter = 1;
+    expect(fatalReady()).toBe(true);
+    sim.laneX = boss.bossX + 2;
+    expect(bossFatalBlow()).toBe(true);
+    expect(boss.bossHP).toBeLessThanOrEqual(100 - 30);
+    expect(boss.fatalUsed).toBe(true);
+    boss.meter = 1;
+    expect(fatalReady()).toBe(false); // once per match
   });
 });
 

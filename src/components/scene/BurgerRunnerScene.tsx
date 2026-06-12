@@ -54,16 +54,16 @@ function CameraRig() {
       // Versus-fight camera: low side angle, tighter framing, heavy impact punch-in.
       const mid = (sim.laneX + boss.bossX) / 2;
       const span = Math.abs(sim.laneX - boss.bossX);
-      const punchIn = boss.timeScale < 0.95 || boss.hitFlash > 0 ? 0.72 : 1;
-      const dist = THREE.MathUtils.clamp(span * 0.74 + 5.3, 7.2, 12.4) * punchIn;
-      const height = 2.45 + (sim.playerY + boss.bossY) * 0.16;
+      const punchIn = boss.timeScale < 0.95 ? 0.66 : 1;
+      const dist = THREE.MathUtils.clamp(span * 0.92 + 4.6, 7.5, 11.5) * punchIn;
+      const height = 2.35 + boss.bossY * 0.2;
       CAMERA_POSITION.set(mid + shakeX, height + shakeY, -dist);
       camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.002, dt));
-      CAMERA_TARGET.set(mid - 0.18, 1.72 + boss.bossY * 0.18, 0);
+      CAMERA_TARGET.set(mid, 1.75 + boss.bossY * 0.2, 0);
       camera.lookAt(CAMERA_TARGET);
       if ('fov' in camera) {
         const cam = camera as THREE.PerspectiveCamera;
-        cam.fov = THREE.MathUtils.lerp(cam.fov, 46, Math.min(1, dt * 3.4));
+        cam.fov = THREE.MathUtils.lerp(cam.fov, 47, Math.min(1, dt * 3));
         cam.updateProjectionMatrix();
       }
       return;
@@ -199,7 +199,7 @@ export function BurgerRunnerScene() {
           <Effects />
         </>
       )}
-      <PlayerBurger character={character} />
+      {!inBossFight && <PlayerBurger character={character} />}
       {inBossFight && <BossArena />}
       <PostFX />
     </>

@@ -12,6 +12,8 @@ interface GestureState {
   y: number;
   id: number;
   fired: boolean;
+  holdTimer: number;
+  blocking: boolean;
 }
 
 export function useRunnerInput() {
@@ -36,6 +38,8 @@ export function useRunnerInput() {
       if (key === 'arrowup' || key === 'w' || key === ' ') store.jump();
       if (key === 'arrowdown' || key === 's') store.slide();
       if (key === 'f' || key === 'enter') store.attack();
+      if (key === 'b') store.blockStart();
+      if (key === 'g') store.fatalBlow();
       if (key === 'p' || key === 'escape') {
         if (store.status === 'running') store.pause();
         else if (store.status === 'paused') store.resume();
@@ -44,7 +48,15 @@ export function useRunnerInput() {
 
     const onPointerDown = (event: PointerEvent) => {
       if (!event.isPrimary) return;
-      gesture.current = { x: event.clientX, y: event.clientY, id: event.pointerId, fired: false };
+      const state: GestureState = { x: event.clientX, y: event.clientY, id: event.pointerId, fired: false, holdTimer: 0, blocking: false };
+      // MK block: holding a finger still raises the guard
+      state.holdTimer = window.setTimeout(() => {
+        if (gesture.current === state && !state.fired) {
+          state.blocking = true;
+          useRunnerStore.getState().blockStart();
+        }
+      }, 240);
+      gesture.current = state;
     };
 
     // fire the action the moment the swipe is unambiguous — no waiting for lift
@@ -55,6 +67,12 @@ export function useRunnerInput() {
       const dy = event.clientY - start.y;
       if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_FIRE_PX) return;
       start.fired = true;
+      window.clearTimeout(start.holdTimer);
+      if (start.blocking) {
+        // moving while guarding drops the block into the swipe action
+        start.blocking = false;
+        useRunnerStore.getState().blockEnd();
+      }
       apply(resolveSwipeGesture(start, { x: event.clientX, y: event.clientY }, SWIPE_FIRE_PX));
     };
 
@@ -62,6 +80,12 @@ export function useRunnerInput() {
       const start = gesture.current;
       if (!start || start.id !== event.pointerId) return;
       gesture.current = null;
+      window.clearTimeout(start.holdTimer);
+      if (start.blocking) {
+        // releasing the hold drops the guard — no tap fires
+        useRunnerStore.getState().blockEnd();
+        return;
+      }
       if (start.fired) return;
       const dx = event.clientX - start.x;
       const dy = event.clientY - start.y;
@@ -75,9 +99,17 @@ export function useRunnerInput() {
     };
 
     const onPointerCancel = () => {
+      if (gesture.current) {
+        window.clearTimeout(gesture.current.holdTimer);
+        if (gesture.current.blocking) useRunnerStore.getState().blockEnd();
+      }
       gesture.current = null;
     };
 
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 'b') useRunnerStore.getState().blockEnd();
+    };
+    window.addEventListener('keyup', onKeyUp);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
     window.addEventListener('pointermove', onPointerMove, { passive: true });
@@ -85,6 +117,7 @@ export function useRunnerInput() {
     window.addEventListener('pointercancel', onPointerCancel, { passive: true });
 
     return () => {
+      window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);

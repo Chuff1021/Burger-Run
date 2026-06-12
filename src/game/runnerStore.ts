@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { playCue, startMusic, stopMusic } from './audioManager';
-import { boss, bossJump, bossMoveLane, bossPrompt, bossSlide, bossTap, startBoss, stepBoss, stopBoss } from './bossSim';
+import { boss, bossBlockEnd, bossBlockStart, bossFatalBlow, bossJump, bossMoveLane, bossPrompt, bossSlide, bossTap, fatalReady, finishTap, startBoss, stepBoss, stopBoss } from './bossSim';
 import { CAMPAIGN_LIVES, EMPTY_POWERUPS, GOALS, RESPAWN_DELAY_MS, SECTION_COIN_STAR } from './constants';
 import { jump as engineJump, moveLane as engineMoveLane, resetSim, sim, slide as engineSlide, stepSim, stopSim } from './engine';
 import { triggerHaptic } from './haptics';
@@ -27,12 +27,15 @@ interface RunnerStore {
   sectionStars: number[];
   lastSectionStars: number;
   nextCheckpoint: number;
-  /** boss fight HUD mirror */
-  bossHp: number;
-  bossHearts: number;
+  /** MK fight HUD mirror */
+  bossHP: number;
+  playerHP: number;
   bossMeter: number;
-  bossPercent: number;
+  bossRound: number;
+  playerWins: number;
+  bossWins: number;
   bossCombo: number;
+  fatalArmed: boolean;
   bossPromptText: string;
   bossDefeated: boolean;
   /** how the last boss fight ended (drives the win/lose screen) */
@@ -61,6 +64,9 @@ interface RunnerStore {
   jump: () => void;
   slide: () => void;
   attack: () => void;
+  blockStart: () => void;
+  blockEnd: () => void;
+  fatalBlow: () => void;
   retryBoss: () => void;
   /** jump straight into the boss arena from the menu — no save writes */
   startBossPractice: () => void;
@@ -113,11 +119,14 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
   sectionStars: [0, 0, 0],
   lastSectionStars: 0,
   nextCheckpoint: 0,
-  bossHp: 3,
-  bossHearts: 3,
+  bossHP: 100,
+  playerHP: 100,
   bossMeter: 0,
-  bossPercent: 0,
+  bossRound: 1,
+  playerWins: 0,
+  bossWins: 0,
   bossCombo: 0,
+  fatalArmed: false,
   bossPromptText: '',
   bossDefeated: false,
   bossOutcome: null,
@@ -228,7 +237,31 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
 
   attack: () => {
     if (get().status !== 'boss') return;
+    if (boss.phase === 'finishHim') {
+      if (finishTap()) {
+        playCue('bossRoar', get().save.settings.audio);
+        triggerHaptic([40, 80, 120], get().save.settings.haptics);
+      }
+      return;
+    }
     bossTap();
+  },
+
+  blockStart: () => {
+    if (get().status !== 'boss') return;
+    bossBlockStart();
+  },
+
+  blockEnd: () => {
+    bossBlockEnd();
+  },
+
+  fatalBlow: () => {
+    if (get().status !== 'boss') return;
+    if (bossFatalBlow()) {
+      playCue('bossRoar', get().save.settings.audio);
+      triggerHaptic([60, 80, 140], get().save.settings.haptics);
+    }
   },
 
   retryBoss: () => {
@@ -236,7 +269,19 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
     playCue('start', settings.audio);
     startMusic(settings.audio && settings.music);
     startBoss();
-    set({ status: 'boss', bossHp: 3, bossHearts: 3, bossMeter: 0, bossPercent: 0, bossCombo: 0, bossOutcome: null, bossPromptText: bossPrompt() });
+    set({
+      status: 'boss',
+      bossHP: 100,
+      playerHP: 100,
+      bossMeter: 0,
+      bossRound: 1,
+      playerWins: 0,
+      bossWins: 0,
+      bossCombo: 0,
+      fatalArmed: false,
+      bossOutcome: null,
+      bossPromptText: bossPrompt()
+    });
   },
 
   startBossPractice: () => {
@@ -255,45 +300,42 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
 
       for (const event of boss.events) {
         switch (event.type) {
-          case 'dodge':
-            playCue('nearMiss', settings.audio);
-            break;
-          case 'perfectDodge':
-            playCue('nearMiss', settings.audio);
-            triggerHaptic([12, 16], settings.haptics);
-            break;
-          case 'meterFull':
-            playCue('powerup', settings.audio);
-            triggerHaptic([20, 30, 20], settings.haptics);
+          case 'bossHit':
+            playCue('punch', settings.audio);
+            triggerHaptic(event.damage >= 10 ? [25, 20, 25] : 18, settings.haptics);
             break;
           case 'playerHit':
             playCue('crash', settings.audio);
-            triggerHaptic([40, 60, 40], settings.haptics);
+            triggerHaptic([40, 50, 30], settings.haptics);
             break;
-          case 'bossHit':
-            playCue('punch', settings.audio);
-            triggerHaptic(event.damage >= 18 ? [25, 20, 25] : 20, settings.haptics);
-            break;
-          case 'counterHit':
-            playCue('shieldBreak', settings.audio);
-            triggerHaptic([20, 20, 35], settings.haptics);
-            break;
-          case 'clank':
+          case 'block':
             playCue('uiClick', settings.audio);
             break;
-          case 'superSlam':
-            playCue('bossRoar', settings.audio);
-            triggerHaptic([40, 80, 60], settings.haptics);
+          case 'special':
+            playCue('powerup', settings.audio);
             break;
-          case 'stagger':
+          case 'uppercut':
+            playCue('slide', settings.audio);
+            break;
+          case 'throw':
             playCue('shieldBreak', settings.audio);
             break;
-          case 'launch':
-            playCue('bossRoar', settings.audio);
-            triggerHaptic([30, 50, 70], settings.haptics);
+          case 'knockdown':
+            playCue('shieldBreak', settings.audio);
+            triggerHaptic([30, 40, 30], settings.haptics);
             break;
           case 'roundStart':
             playCue('bossRoar', settings.audio);
+            break;
+          case 'ko':
+            playCue('goal', settings.audio);
+            triggerHaptic([40, 60, 80], settings.haptics);
+            break;
+          case 'finishHim':
+            playCue('bossRoar', settings.audio);
+            break;
+          case 'fatal':
+            playCue('crash', settings.audio);
             break;
           case 'victory':
             playCue('goal', settings.audio);
@@ -340,11 +382,14 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
       if (hudAccumulator >= 0.1) {
         hudAccumulator = 0;
         set({
-          bossHp: boss.hp,
-          bossHearts: boss.hearts,
+          bossHP: Math.round(boss.bossHP),
+          playerHP: Math.round(boss.playerHP),
           bossMeter: boss.meter,
-          bossPercent: Math.round(boss.percent),
+          bossRound: boss.round,
+          playerWins: boss.playerWins,
+          bossWins: boss.bossWins,
           bossCombo: boss.combo,
+          fatalArmed: fatalReady(),
           bossPromptText: bossPrompt()
         });
       }
@@ -437,9 +482,13 @@ export const useRunnerStore = create<RunnerStore>((set, get) => ({
         status: 'boss',
         save: campaignSave,
         toasts: [],
-        bossHp: 3,
-        bossHearts: 3,
+        bossHP: 100,
+        playerHP: 100,
         bossMeter: 0,
+        bossRound: 1,
+        playerWins: 0,
+        bossWins: 0,
+        fatalArmed: false,
         bossPromptText: bossPrompt(),
         ...hudSnapshot()
       });

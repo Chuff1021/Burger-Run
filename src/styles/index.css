@@ -657,6 +657,120 @@ button:disabled {
   }
 }
 
+
+/* ---- MK fight HUD ---- */
+
+.mk-bars {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.mk-side {
+  display: grid;
+  gap: 4px;
+}
+
+.mk-bar {
+  height: 22px;
+  border: 2px solid rgba(255, 216, 77, 0.55);
+  border-radius: 4px;
+  background: rgba(40, 8, 8, 0.8);
+  overflow: hidden;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.6);
+}
+
+.mk-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(180deg, #ffe58a, #ffae1f 60%, #d97e0a);
+  box-shadow: 0 0 14px rgba(255, 191, 63, 0.8);
+  transition: width 0.18s ease-out;
+}
+
+.mk-bar.boss i {
+  margin-left: auto;
+  background: linear-gradient(180deg, #ff8d7a, #ff3b2a 60%, #b41212);
+  box-shadow: 0 0 14px rgba(255, 59, 42, 0.8);
+}
+
+.mk-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mk-name {
+  color: #fff3cf;
+  font: 400 0.85rem 'Titan One', sans-serif;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 0 rgba(20, 10, 2, 0.9);
+}
+
+.mk-pips {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.mk-pips b {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 216, 77, 0.6);
+  background: transparent;
+}
+
+.mk-pips b.won {
+  background: #ffd84d;
+  box-shadow: 0 0 10px rgba(255, 216, 77, 0.9);
+}
+
+.mk-round {
+  padding: 4px 10px;
+  color: var(--gold);
+  border: 1px solid rgba(255, 216, 77, 0.5);
+  border-radius: 8px;
+  background: rgba(10, 8, 4, 0.7);
+  font: 400 1rem 'Titan One', sans-serif;
+}
+
+.fatal-button {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + 64px);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 20px;
+  color: #1d0202;
+  border: 2px solid #ffb09a;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ff8d7a, #ff3b2a 55%, #b41212);
+  box-shadow: 0 0 34px rgba(255, 59, 42, 0.8);
+  font: 400 1.05rem 'Titan One', sans-serif;
+  letter-spacing: 0.05em;
+  pointer-events: auto;
+  animation: turn-pulse 0.45s ease-in-out infinite;
+}
+
+.mk-controls-hint {
+  position: absolute;
+  bottom: max(6px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  color: #8b97a8;
+  font: 700 0.68rem Rajdhani, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 /* ---- turn banner ---- */
 
 .turn-banner {
