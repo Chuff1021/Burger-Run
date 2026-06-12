@@ -9,13 +9,13 @@ import { sim } from './engine';
 import { clamp } from './math';
 
 /**
- * Smash-style boss fight, side view. Fight axis = world X: the player
- * (rendered via the puppeted sim fields) duels THE MEGA MANAGER across a
- * floating stage. Mechanics built as a Burger Run platform-boss duel:
- * - hitstop: Smash formula floor(d*0.65+6) frames, both fighters freeze
+ * Cinematic boss duel, side view. Fight axis = world X: the player
+ * (rendered via the puppeted sim fields) duels THE MEGA MANAGER inside a
+ * neon factory fight cage. Mechanics are tuned for a premium mobile boss:
+ * - hitstop: impact frames freeze both fighters so hits feel heavy
  * - input buffer: short tap buffer so mobile taps feel intentional
- * - knockback: accumulated percent increases launch force
- * - neutral rules: counter early telegraphs, punish recovery/stagger, clank
+ * - damage pressure: accumulated trauma increases launch force
+ * - neutral rules: counter early telegraphs, punish recovery/stagger, clash
  *   if you swing into armored active attacks
  * - boss telegraphs clearly, then gives real punish windows instead of QTE mash
  */
@@ -136,7 +136,7 @@ export const BOSS_HOME_X = -8;
 const BOSS_MIN_X = -10.5;
 const DASH_STEP = 1.9;
 
-const INTRO_TIME = 2.4;
+const INTRO_TIME = 1.25;
 const RECOVERY_TIME = 1.25; // punish window after each boss attack
 const WINDUP_TIME = 1.5;
 const STAGGER_TIME = 3.5; // big punish window
@@ -159,8 +159,8 @@ const SUPER_DMG = 35;
 const COUNTER_TELEGRAPH_WINDOW = 0.48;
 const PUNISH_DAMAGE_MULT = 1.18;
 const COUNTER_DAMAGE_MULT = 1.35;
-/** percent thresholds where the next hit LAUNCHES a pip away */
-const PIP_THRESHOLDS = [60, 130, 200];
+/** trauma thresholds where the next hit LAUNCHES a health segment away */
+export const PIP_THRESHOLDS = [60, 130, 200];
 const METER_PER_DODGE = 0.18;
 const METER_PER_PERFECT_DODGE = 0.3;
 const METER_PER_HIT = 0.08;
@@ -260,7 +260,7 @@ export function bossJump(): boolean {
 
 export function bossSlide(): boolean {
   if (fightInputBlocked()) return false;
-  // full meter = BURGER BURST finisher, any time you can reach him
+  // full meter = FINAL FRY finisher, any time you can reach him
   if (boss.meter >= 1 && Math.abs(sim.laneX - boss.bossX) < RUSH_ASSIST_RANGE) {
     snapToStrikeRange();
     boss.meter = 0;
@@ -277,7 +277,7 @@ export function bossSlide(): boolean {
   return true;
 }
 
-/** TAP = attack (light, chains into a heavy on the 3rd hit) */
+/** TAP = strike (light, chains into a heavy on the 3rd hit) */
 export function bossTap() {
   if (fightInputBlocked()) return;
   if (boss.atkPhase === 'idle') {
@@ -649,24 +649,26 @@ export function bossPrompt(): string {
     case 'attack': {
       const attack = boss.attack;
       if (!attack || attack.resolved) return '';
+      const telegraphProgress = attack.t / attack.telegraph;
+      if (telegraphProgress <= COUNTER_TELEGRAPH_WINDOW) return 'COUNTER WINDOW';
       switch (attack.type) {
         case 'slam':
-          return Math.abs(sim.laneX - attack.zoneX) <= 1.7 ? 'MOVE AWAY!' : '';
+          return Math.abs(sim.laneX - attack.zoneX) <= 1.7 ? 'EVADE SLAM' : '';
         case 'lowSweep':
-          return 'JUMP THE PIN!';
+          return 'LOW SWEEP';
         case 'highSweep':
-          return 'DUCK!';
+          return 'HIGH STRIKE';
         case 'shockwave':
-          return 'JUMP THE WAVE!';
+          return 'SHOCKWAVE';
       }
       break;
     }
     case 'recovery':
-      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER BURST!' : 'TAP — RUSH PUNISH!';
+      return boss.meter >= 1 ? 'FINAL FRY READY' : 'PUNISH - STRIKE';
     case 'windup':
-      return 'BIG ONE — JUMP!';
+      return 'OVERHEAD - EVADE';
     case 'stagger':
-      return boss.meter >= 1 ? 'SWIPE DOWN — BURGER BURST!' : 'STAGGERED — TAP COMBO!';
+      return boss.meter >= 1 ? 'FINAL FRY READY' : 'STAGGER COMBO';
     case 'launch':
       return 'LAUNCHED!';
     case 'victory':

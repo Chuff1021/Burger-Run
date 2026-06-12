@@ -95,11 +95,7 @@ export function PlayerBurger({ character }: { character: CharacterDefinition }) 
     // boss fight: face the boss (-X), punch with the lead arm on attack
     if (boss.active) {
       root.current.rotation.y = -Math.PI / 2;
-      root.current.rotation.x = sliding ? 0.5 : -0.05;
-      if (rightArm.current && boss.atkPhase !== 'idle') {
-        rightArm.current.rotation.x = boss.atkPhase === 'recover' ? -1.2 : -2.1;
-        rightArm.current.rotation.z = -0.1;
-      }
+      root.current.rotation.x = sliding ? 0.42 : -0.08;
     }
 
     // run cycle
@@ -147,6 +143,24 @@ export function PlayerBurger({ character }: { character: CharacterDefinition }) 
     if (head.current) {
       head.current.rotation.z = swing * 0.05;
       head.current.position.y = 1.62 + Math.abs(Math.cos(phase.current)) * 0.025;
+    }
+
+    if (boss.active) {
+      const strike = boss.atkPhase === 'startup' || boss.atkPhase === 'active';
+      const recovering = boss.atkPhase === 'recover';
+      body.current.rotation.y = strike ? -0.28 : Math.sin(state.clock.elapsedTime * 3.4) * 0.04;
+      body.current.position.y = Math.sin(state.clock.elapsedTime * 5.5) * 0.025;
+      if (leftArm.current && rightArm.current) {
+        leftArm.current.rotation.x = sliding ? -1.15 : -1.45;
+        leftArm.current.rotation.z = sliding ? 0.34 : 0.54;
+        rightArm.current.rotation.x = strike ? -2.65 : recovering ? -0.85 : -1.35;
+        rightArm.current.rotation.z = strike ? -0.42 : -0.34;
+      }
+      if (leftLeg.current && rightLeg.current) {
+        leftLeg.current.rotation.x = -0.42;
+        rightLeg.current.rotation.x = 0.32;
+      }
+      if (head.current) head.current.rotation.z = strike ? -0.18 : Math.sin(state.clock.elapsedTime * 4) * 0.04;
     }
 
     // powerup visuals

@@ -286,7 +286,7 @@ describe('campaign mode', () => {
   });
 });
 
-describe('boss fight (smash-style)', () => {
+describe('boss fight duel', () => {
   function step(seconds: number) {
     let last: 'fighting' | 'won' | 'lost' = 'fighting';
     for (let i = 0; i < Math.ceil(seconds * 60); i += 1) last = stepBoss(1 / 60);
@@ -295,7 +295,7 @@ describe('boss fight (smash-style)', () => {
 
   beforeEach(() => {
     startBoss();
-    step(2.6); // through the intro
+    step(1.32); // through the intro, before the first hit resolves
   });
 
   it('starts the first attack round after the intro', () => {

@@ -1,4 +1,3 @@
-import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -11,9 +10,9 @@ const STAGE_W = STAGE_RIGHT - STAGE_LEFT;
 const STAGE_MID = (STAGE_LEFT + STAGE_RIGHT) / 2;
 
 /**
- * Smash-style floating stage, viewed side-on. Fight axis = world X:
+ * Cinematic grill-pit duel arena, viewed side-on. Fight axis = world X:
  * player stage-left (+X side of screen-left), MEGA MANAGER stage-right.
- * Camera (in CameraRig) does midpoint framing with dynamic zoom.
+ * Camera (in CameraRig) frames it like a premium versus boss fight.
  */
 export function BossArena() {
   const bossRoot = useRef<THREE.Group>(null);
@@ -23,9 +22,8 @@ export function BossArena() {
   const zoneRef = useRef<THREE.Mesh>(null);
   const pinRef = useRef<THREE.Group>(null);
   const waveRef = useRef<THREE.Mesh>(null);
-  const percentText = useRef<{ text?: string; color?: string } & THREE.Object3D>(null);
 
-  const signTex = useMemo(() => neonSignTexture('MEGA KITCHEN ARENA', '#ff3b2a', 'NO REFUNDS'), []);
+  const signTex = useMemo(() => neonSignTexture('GRILL PIT DUEL', '#ff3b2a', 'WIN OR BURN'), []);
   const halo = useMemo(() => glowStreakTexture(), []);
 
   const mats = useMemo(
@@ -41,19 +39,22 @@ export function BossArena() {
       eye: new THREE.MeshStandardMaterial({ color: '#fff8e6', roughness: 0.3, emissive: '#ffae1f', emissiveIntensity: 0.4 }),
       pupil: new THREE.MeshStandardMaterial({ color: '#1a0d04', roughness: 0.4 }),
       hitFlash: new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0 }),
-      stage: new THREE.MeshStandardMaterial({ color: '#2a3140', metalness: 0.7, roughness: 0.32, envMapIntensity: 1.2 }),
-      stageTop: new THREE.MeshStandardMaterial({ color: '#39414f', metalness: 0.75, roughness: 0.28, envMapIntensity: 1.4 }),
-      edgeGlow: new THREE.MeshStandardMaterial({ color: '#ffbf3f', emissive: '#ff9a1f', emissiveIntensity: 2.6 }),
+      stage: new THREE.MeshStandardMaterial({ color: '#171a22', metalness: 0.85, roughness: 0.28, envMapIntensity: 1.4 }),
+      stageTop: new THREE.MeshStandardMaterial({ color: '#20242c', metalness: 0.9, roughness: 0.2, envMapIntensity: 1.7 }),
+      cage: new THREE.MeshStandardMaterial({ color: '#090b10', metalness: 0.95, roughness: 0.22, emissive: '#140404', emissiveIntensity: 0.35 }),
+      edgeGlow: new THREE.MeshStandardMaterial({ color: '#ffbf3f', emissive: '#ff4a0a', emissiveIntensity: 3.2 }),
+      bloodline: new THREE.MeshStandardMaterial({ color: '#5e0803', emissive: '#ff1608', emissiveIntensity: 1.6, roughness: 0.35 }),
+      flame: new THREE.MeshBasicMaterial({ color: '#ff7a1f', transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false }),
       underGlow: new THREE.MeshBasicMaterial({
         map: glowStreakTexture(),
-        color: '#ff6a1a',
+        color: '#ff2b1c',
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.62,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         side: THREE.DoubleSide
       }),
-      backdrop: new THREE.MeshStandardMaterial({ color: '#0c0f16', metalness: 0.6, roughness: 0.5 }),
+      backdrop: new THREE.MeshStandardMaterial({ color: '#050609', metalness: 0.75, roughness: 0.42 }),
       sign: new THREE.MeshBasicMaterial({ map: signTex, toneMapped: false }),
       signHalo: new THREE.MeshBasicMaterial({
         map: halo,
@@ -128,14 +129,6 @@ export function BossArena() {
     if (browL.current) browL.current.rotation.z = -anger;
     if (browR.current) browR.current.rotation.z = anger;
 
-    // ---- percent readout above the boss (Smash-style heat color) ----
-    const pct = percentText.current as unknown as { text: string; color: string } | null;
-    if (pct) {
-      pct.text = `${Math.round(boss.percent)}%`;
-      const p = Math.min(1, boss.percent / 200);
-      pct.color = p < 0.35 ? '#fff8e6' : p < 0.7 ? '#ffd84d' : '#ff3b2a';
-    }
-
     // ---- telegraphs ----
     mats.zone.opacity = 0;
     mats.wave.opacity = 0;
@@ -170,15 +163,24 @@ export function BossArena() {
 
   return (
     <group>
-      {/* ---------------- the floating stage ---------------- */}
+      {/* ---------------- the grill-pit fight floor ---------------- */}
       <group>
         <mesh material={mats.stageTop} position={[STAGE_MID, -0.12, 0]}>
           <boxGeometry args={[STAGE_W, 0.24, 7]} />
         </mesh>
+        {[-7.2, -4.8, -2.4, 0, 2.4, 4.8].map((x) => (
+          <mesh key={x} material={mats.cage} position={[x, 0.035, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <boxGeometry args={[0.04, 7.1, 0.06]} />
+          </mesh>
+        ))}
+        {[-2.4, 0, 2.4].map((z) => (
+          <mesh key={z} material={mats.bloodline} position={[STAGE_MID, 0.055, z]}>
+            <boxGeometry args={[STAGE_W - 1.4, 0.025, 0.05]} />
+          </mesh>
+        ))}
         <mesh material={mats.stage} position={[STAGE_MID, -1.3, 0]}>
           <boxGeometry args={[STAGE_W - 1.2, 2.2, 5.6]} />
         </mesh>
-        {/* glowing rim, Smash-stage style */}
         <mesh material={mats.edgeGlow} position={[STAGE_MID, 0.02, 3.45]}>
           <boxGeometry args={[STAGE_W, 0.08, 0.1]} />
         </mesh>
@@ -190,10 +192,15 @@ export function BossArena() {
             <boxGeometry args={[0.1, 0.08, 7]} />
           </mesh>
         ))}
-        {/* under-stage glow falling into the void */}
+        {/* furnace glow under the cage */}
         <mesh material={mats.underGlow} position={[STAGE_MID, -3.4, 0]} scale={[STAGE_W * 1.1, 5, 1]}>
           <planeGeometry args={[1, 1]} />
         </mesh>
+        {[-9.5, -5.5, -1.5, 2.5, 6.2].map((x, i) => (
+          <mesh key={x} material={mats.flame} position={[x, -0.02, i % 2 ? -3.15 : 3.15]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.0, 1.8, 1]}>
+            <planeGeometry args={[1, 1]} />
+          </mesh>
+        ))}
       </group>
 
       {/* ---------------- backdrop ---------------- */}
@@ -201,21 +208,32 @@ export function BossArena() {
         <mesh material={mats.backdrop} position={[0, 5, 0.5]}>
           <boxGeometry args={[STAGE_W + 14, 16, 1]} />
         </mesh>
+        {Array.from({ length: 14 }, (_, i) => -STAGE_W / 2 - 5 + i * ((STAGE_W + 10) / 13)).map((x) => (
+          <mesh key={x} material={mats.cage} position={[x, 4.2, -0.08]}>
+            <boxGeometry args={[0.16, 10.5, 0.2]} />
+          </mesh>
+        ))}
+        {[1.1, 3.2, 5.3, 7.4].map((y) => (
+          <mesh key={y} material={mats.cage} position={[0, y, -0.06]}>
+            <boxGeometry args={[STAGE_W + 12, 0.12, 0.22]} />
+          </mesh>
+        ))}
         <mesh material={mats.signHalo} position={[0, 6.4, -0.15]} scale={[16, 7, 1]}>
           <planeGeometry args={[1, 1]} />
         </mesh>
         <mesh material={mats.sign} position={[0, 6.4, -0.2]} rotation={[0, Math.PI, 0]}>
           <planeGeometry args={[9.5, 3.5]} />
         </mesh>
-        {/* crowd shelf lights */}
+        {/* hostile crowd shelf lights */}
         {[-8, -4, 0, 4, 8].map((x, i) => (
-          <pointLight key={x} position={[x, 2.5, -1]} intensity={6} color={i % 2 ? '#24d6ff' : '#ff9a1f'} distance={9} decay={2} />
+          <pointLight key={x} position={[x, 2.5, -1]} intensity={8} color={i % 2 ? '#24d6ff' : '#ff3b2a'} distance={9} decay={2} />
         ))}
       </group>
 
       {/* arena spotlights */}
-      <pointLight position={[BOSS_HOME_X, 8, -3]} intensity={40} color="#ffd84d" distance={24} decay={2} />
-      <pointLight position={[STAGE_MAX_X, 7, -4]} intensity={28} color="#24d6ff" distance={20} decay={2} />
+      <pointLight position={[BOSS_HOME_X, 8, -3]} intensity={55} color="#ff3b2a" distance={25} decay={2} />
+      <pointLight position={[STAGE_MAX_X, 7, -4]} intensity={34} color="#24d6ff" distance={20} decay={2} />
+      <pointLight position={[STAGE_MID, 1.2, 1]} intensity={38} color="#ff8a1f" distance={18} decay={2} />
 
       {/* ---------------- THE MEGA MANAGER ---------------- */}
       <group ref={bossRoot} position={[BOSS_HOME_X, 1.4, 0]}>
@@ -277,20 +295,6 @@ export function BossArena() {
           <mesh material={mats.hitFlash} position={[0, 1, 0]} scale={1.45}>
             <sphereGeometry args={[1.6, 16, 12]} />
           </mesh>
-          {/* Smash-style damage percent floating overhead */}
-          <Text
-            ref={percentText as never}
-            position={[0, 4.1, 0]}
-            rotation={[0, -Math.PI / 2, 0]} // cancels the boss group's -90° yaw so the glyphs face the camera readably
-            fontSize={0.9}
-            anchorX="center"
-            anchorY="middle"
-            color="#fff8e6"
-            outlineWidth={0.06}
-            outlineColor="#140a02"
-          >
-            0%
-          </Text>
         </group>
       </group>
 

@@ -388,70 +388,118 @@ button:disabled {
 
 /* ---- boss fight HUD ---- */
 
-.boss-hearts {
+.versus-hud {
   position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  left: max(14px, env(safe-area-inset-left));
-  display: flex;
-  gap: 8px;
-  color: #ff5a4a;
-  filter: drop-shadow(0 0 10px rgba(255, 59, 42, 0.8));
-}
-
-.boss-bar {
-  position: absolute;
-  top: max(14px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
+  top: max(12px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  right: max(10px, env(safe-area-inset-right));
   display: grid;
-  gap: 6px;
-  justify-items: center;
-  padding: 10px 24px;
-  border: 1px solid rgba(255, 59, 42, 0.6);
-  border-radius: 12px;
-  background: var(--panel);
-  box-shadow: 0 0 26px rgba(255, 59, 42, 0.35);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(8px, 2vw, 18px);
 }
 
-.boss-bar strong {
-  color: #ff8d7a;
-  font: 400 clamp(0.95rem, 3.2vw, 1.35rem) 'Titan One', sans-serif;
-  letter-spacing: 0.08em;
-  text-shadow: 0 2px 0 rgba(90, 12, 6, 0.9), 0 0 18px rgba(255, 59, 42, 0.7);
+.fighter-panel {
+  position: relative;
+  min-width: 0;
+  padding: 9px 10px 12px;
+  border: 1px solid rgba(210, 226, 255, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.02)),
+    rgba(3, 5, 9, 0.72);
+  box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.04), 0 0 24px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(12px);
 }
 
-.boss-pips {
+.fighter-panel::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 191, 63, 0.7), transparent 45%, rgba(36, 214, 255, 0.45));
+  opacity: 0.34;
+}
+
+.boss-side::before {
+  background: linear-gradient(270deg, rgba(255, 59, 42, 0.75), transparent 48%, rgba(255, 191, 63, 0.42));
+}
+
+.fighter-meta {
+  position: relative;
+  z-index: 1;
   display: flex;
+  justify-content: space-between;
   gap: 10px;
+  margin-bottom: 7px;
+  color: #f7fbff;
+  font: 800 clamp(0.66rem, 2vw, 0.92rem) Rajdhani, sans-serif;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  text-shadow: 0 0 14px rgba(255, 255, 255, 0.25);
 }
 
-.boss-pip {
-  font-size: 1.5rem;
-  filter: drop-shadow(0 0 8px rgba(255, 191, 63, 0.8));
-  transition: opacity 0.3s, filter 0.3s;
-}
-
-.boss-pip.empty {
-  opacity: 0.22;
-  filter: grayscale(1);
-}
-
-.boss-percent {
-  margin-left: 10px;
-  color: #fff8e6;
-  font: 400 1.4rem 'Titan One', sans-serif;
-  text-shadow: 0 2px 0 rgba(40, 30, 10, 0.9), 0 0 14px rgba(255, 248, 230, 0.5);
-}
-
-.boss-percent.warm {
+.fighter-meta b {
   color: var(--gold);
-  text-shadow: 0 2px 0 rgba(122, 53, 8, 0.9), 0 0 18px rgba(255, 191, 63, 0.8);
+  white-space: nowrap;
 }
 
-.boss-percent.hot {
-  color: #ff3b2a;
-  text-shadow: 0 2px 0 rgba(90, 12, 6, 0.9), 0 0 20px rgba(255, 59, 42, 0.9);
-  animation: turn-pulse 0.4s ease-in-out infinite;
+.health-shell {
+  position: relative;
+  z-index: 1;
+  height: clamp(16px, 3.2vw, 24px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.7), rgba(31, 16, 12, 0.82));
+  overflow: hidden;
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.85), 0 0 18px rgba(255, 59, 42, 0.16);
+}
+
+.health-shell i {
+  display: block;
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.player-health i {
+  background: linear-gradient(90deg, #1dded8, #fff06b 58%, #ffb238);
+  box-shadow: 0 0 18px rgba(36, 214, 255, 0.55);
+}
+
+.boss-health i {
+  margin-left: auto;
+  background: linear-gradient(270deg, #ff2b1c, #ff8a1f 62%, #ffe06b);
+  box-shadow: 0 0 18px rgba(255, 59, 42, 0.6);
+}
+
+.round-medallion {
+  display: grid;
+  place-items: center;
+  width: clamp(58px, 12vw, 86px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 191, 63, 0.75);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 231, 144, 0.42), transparent 30%),
+    linear-gradient(180deg, rgba(24, 12, 8, 0.94), rgba(0, 0, 0, 0.86));
+  color: #fff3c2;
+  box-shadow: 0 0 28px rgba(255, 191, 63, 0.38), inset 0 0 18px rgba(255, 191, 63, 0.18);
+  font-family: Rajdhani, sans-serif;
+  text-transform: uppercase;
+}
+
+.round-medallion span {
+  margin-top: 7px;
+  font-size: clamp(0.55rem, 1.7vw, 0.72rem);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.round-medallion b {
+  margin-top: -10px;
+  font: 400 clamp(1.5rem, 5vw, 2.3rem) 'Titan One', sans-serif;
+  text-shadow: 0 3px 0 rgba(122, 53, 8, 0.9), 0 0 18px rgba(255, 191, 63, 0.85);
 }
 
 .combo-counter {
@@ -465,7 +513,7 @@ button:disabled {
   animation: toast-pop 1.2s ease-out forwards;
 }
 
-.smash-meter {
+.finisher-meter {
   position: absolute;
   bottom: max(18px, env(safe-area-inset-bottom));
   left: 50%;
@@ -473,59 +521,140 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(80vw, 420px);
+  width: min(72vw, 440px);
   padding: 10px 16px;
-  color: #67ff72;
-  border: 1px solid rgba(103, 255, 114, 0.45);
-  border-radius: 12px;
-  background: var(--panel);
+  color: #ffef8a;
+  border: 1px solid rgba(255, 191, 63, 0.5);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(23, 13, 4, 0.86), rgba(0, 0, 0, 0.78));
+  box-shadow: 0 0 24px rgba(255, 130, 31, 0.18), inset 0 0 16px rgba(255, 191, 63, 0.08);
 }
 
-.smash-meter span {
-  font: 700 0.8rem Rajdhani, sans-serif;
-  letter-spacing: 0.22em;
+.finisher-meter span {
+  font: 900 0.78rem Rajdhani, sans-serif;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
 }
 
-.smash-track {
+.finisher-track {
   flex: 1;
   height: 12px;
-  border-radius: 6px;
-  background: rgba(103, 255, 114, 0.12);
+  border-radius: 2px;
+  background: rgba(255, 191, 63, 0.12);
   overflow: hidden;
 }
 
-.smash-track i {
+.finisher-track i {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #2dd348, #67ff72);
-  box-shadow: 0 0 14px rgba(103, 255, 114, 0.8);
+  background: linear-gradient(90deg, #ff2b1c, #ff8a1f 48%, #fff06b);
+  box-shadow: 0 0 16px rgba(255, 191, 63, 0.85);
   transition: width 0.15s;
 }
 
-.smash-meter.ready {
-  box-shadow: 0 0 28px rgba(103, 255, 114, 0.55);
+.finisher-meter.ready {
+  color: #ffffff;
+  border-color: rgba(255, 59, 42, 0.9);
+  box-shadow: 0 0 34px rgba(255, 59, 42, 0.6);
   animation: turn-pulse 0.5s ease-in-out infinite;
 }
 
 .boss-prompt {
   position: absolute;
-  top: 22vh;
+  top: 18vh;
   left: 50%;
   transform: translateX(-50%);
-  padding: 12px 26px;
-  color: var(--gold);
-  border: 2px solid rgba(255, 191, 63, 0.7);
-  border-radius: 14px;
-  background: rgba(10, 8, 4, 0.74);
-  box-shadow: 0 0 30px rgba(255, 191, 63, 0.45);
-  font: 400 clamp(1.3rem, 5vw, 2.2rem) 'Titan One', sans-serif;
+  padding: 11px 24px;
+  color: #fff8e6;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.08), rgba(2, 3, 6, 0.82) 12%, rgba(2, 3, 6, 0.82) 88%, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 0 34px rgba(0, 0, 0, 0.55);
+  font: 400 clamp(1.1rem, 4.5vw, 2rem) 'Titan One', sans-serif;
+  letter-spacing: 0.04em;
   text-align: center;
-  text-shadow: 0 3px 0 rgba(122, 53, 8, 0.9), 0 0 24px rgba(255, 191, 63, 0.7);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.95), 0 0 24px rgba(255, 255, 255, 0.28);
   white-space: nowrap;
 }
 
-.boss-prompt.urgent {
-  animation: turn-pulse 0.4s ease-in-out infinite;
+.boss-prompt.attack {
+  color: #ffef8a;
+  border-color: rgba(255, 191, 63, 0.72);
+  box-shadow: 0 0 32px rgba(255, 191, 63, 0.35);
+}
+
+.boss-prompt.defend {
+  color: #8cecff;
+  border-color: rgba(36, 214, 255, 0.62);
+  box-shadow: 0 0 32px rgba(36, 214, 255, 0.3);
+}
+
+.fight-command-dock {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 7px;
+}
+
+.fight-command-dock span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 82px;
+  padding: 8px 10px;
+  border: 1px solid rgba(210, 226, 255, 0.18);
+  border-radius: 6px;
+  color: #dcecff;
+  background: rgba(3, 5, 9, 0.68);
+  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.04), 0 0 18px rgba(0, 0, 0, 0.3);
+  font: 900 0.74rem Rajdhani, sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 720px) {
+  .versus-hud {
+    gap: 6px;
+  }
+
+  .fighter-panel {
+    padding: 7px 7px 9px;
+  }
+
+  .fighter-meta {
+    display: grid;
+    gap: 1px;
+  }
+
+  .boss-prompt {
+    top: 19vh;
+    max-width: 92vw;
+    white-space: normal;
+  }
+
+  .finisher-meter {
+    width: min(92vw, 380px);
+    bottom: max(14px, env(safe-area-inset-bottom));
+  }
+
+  .fight-command-dock {
+    left: 50%;
+    right: auto;
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 54px);
+    grid-template-columns: repeat(4, auto);
+    transform: translateX(-50%);
+  }
+
+  .fight-command-dock span {
+    min-width: 0;
+    padding: 7px 8px;
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+  }
 }
 
 /* ---- turn banner ---- */

@@ -51,20 +51,19 @@ function CameraRig() {
     }
 
     if (status === 'boss' || status === 'bossDefeat') {
-      // Smash camera: side-on, frame the midpoint of both fighters and zoom
-      // to fit their separation; special-zoom punches in during launches
+      // Versus-fight camera: low side angle, tighter framing, heavy impact punch-in.
       const mid = (sim.laneX + boss.bossX) / 2;
       const span = Math.abs(sim.laneX - boss.bossX);
-      const punchIn = boss.timeScale < 0.95 ? 0.62 : 1;
-      const dist = THREE.MathUtils.clamp(span * 1.05 + 5.5, 9, 15.5) * punchIn;
-      const height = 3.2 + (sim.playerY + boss.bossY) * 0.18;
+      const punchIn = boss.timeScale < 0.95 || boss.hitFlash > 0 ? 0.72 : 1;
+      const dist = THREE.MathUtils.clamp(span * 0.74 + 5.3, 7.2, 12.4) * punchIn;
+      const height = 2.45 + (sim.playerY + boss.bossY) * 0.16;
       CAMERA_POSITION.set(mid + shakeX, height + shakeY, -dist);
       camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.002, dt));
-      CAMERA_TARGET.set(mid, 2.1 + boss.bossY * 0.25, 0);
+      CAMERA_TARGET.set(mid - 0.18, 1.72 + boss.bossY * 0.18, 0);
       camera.lookAt(CAMERA_TARGET);
       if ('fov' in camera) {
         const cam = camera as THREE.PerspectiveCamera;
-        cam.fov = THREE.MathUtils.lerp(cam.fov, 54, Math.min(1, dt * 3));
+        cam.fov = THREE.MathUtils.lerp(cam.fov, 46, Math.min(1, dt * 3.4));
         cam.updateProjectionMatrix();
       }
       return;
