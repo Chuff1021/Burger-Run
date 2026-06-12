@@ -14,6 +14,10 @@ export interface RigIntent {
   speed?: number;
   /** freeze the pose (hitstun, knockdown — procedural juice takes over) */
   paused?: boolean;
+  /** head-turn toward the opponent, -1..1 */
+  face?: number;
+  /** impulse 0..1 — whiplash recoil through spine and head */
+  recoil?: number;
 }
 
 interface FighterRigProps {
@@ -43,7 +47,26 @@ export function FighterRig({ rigUrl, clips, height, driver }: FighterRigProps) {
       const clip = clipGltfs[i]?.animations?.[0];
       if (clip) actions.set(key, mixer.clipAction(clip));
     });
-    if (rigAnims[0]) actions.set('__rig', mixer.clipAction(rigAnims[0]));
+    if (rigAnims[0]) {
+      actions.set('__rig', mixer.clipAction(rigAnims[0]));
+      // carve a breathing GUARD IDLE from the first 28% of the rig's own
+      // guard-prep clip, ping-ponged — no more slow-motion-walk statues
+      const d = rigAnims[0].duration;
+      const idleClip = THREE.AnimationUtils.subclip(rigAnims[0], 'guardIdle', 0, Math.max(2, Math.floor(d * 30 * 0.28)), 30);
+      const idle = mixer.clipAction(idleClip);
+      idle.setLoop(THREE.LoopPingPong, Infinity);
+      actions.set('idle', idle);
+    }
+
+    // bones for the procedural life layer (breath, head-track, hit recoil)
+    const bones: { spine: THREE.Bone[]; head: THREE.Bone | null } = { spine: [], head: null };
+    model.traverse((o) => {
+      const b = o as THREE.Bone;
+      if (!b.isBone) return;
+      const n = b.name.toLowerCase();
+      if (/spine|chest|upperchest/.test(n) && bones.spine.length < 2) bones.spine.push(b);
+      if (!bones.head && /head/.test(n)) bones.head = b;
+    });
 
     // pose with a real clip BEFORE measuring — bind poses lie about size
     const poseKey = actions.has('walk') ? 'walk' : clipKeys[0];
@@ -83,11 +106,13 @@ export function FighterRig({ rigUrl, clips, height, driver }: FighterRigProps) {
       poseAction.stop();
       mixer.update(0);
     }
-    return { model, mixer, actions };
+    return { model, mixer, actions, bones };
   }, [scene, clipKeys, clipGltfs, rigAnims, height]);
-  const { model, mixer, actions } = rig;
+  const { model, mixer, actions, bones } = rig;
 
   const current = useRef<{ clip: string; nonce: number } | null>(null);
+  const lifeT = useRef(rigUrl.length * 1.73); // deterministic per-rig phase offset
+  const recoil = useRef(0);
 
   /* eslint-disable react-hooks/immutability -- imperative animation control */
   useFrame((_, dt) => {
@@ -110,6 +135,21 @@ export function FighterRig({ rigUrl, clips, height, driver }: FighterRigProps) {
     // hitstop freezes both fighters mid-swing — the Smash juice
     const frozen = intent.paused || boss.hitstopT > 0;
     mixer.update(frozen ? 0 : Math.min(dt, 0.05) * (boss.active ? boss.timeScale : 1));
+
+    // ---- life layer: applied AFTER the mixer so it rides every pose ----
+    lifeT.current += dt;
+    const t = lifeT.current;
+    recoil.current = Math.max(0, recoil.current - dt * 6);
+    if ((intent.recoil ?? 0) > recoil.current) recoil.current = intent.recoil ?? 0;
+    for (let i = 0; i < bones.spine.length; i += 1) {
+      const b = bones.spine[i];
+      b.rotation.x += Math.sin(t * 2.1 + i) * 0.02 + recoil.current * 0.35; // breathe + snap back on hit
+      b.rotation.z += Math.sin(t * 1.4 + i * 1.7) * 0.012;
+    }
+    if (bones.head) {
+      bones.head.rotation.y += Math.sin(t * 0.9) * 0.05 + (intent.face ?? 0) * 0.22; // alive + eyeing the opponent
+      bones.head.rotation.x += recoil.current * 0.5;
+    }
   });
   /* eslint-enable react-hooks/immutability */
 

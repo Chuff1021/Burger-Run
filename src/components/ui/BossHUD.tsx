@@ -71,7 +71,7 @@ export function BossHUD() {
         </button>
       )}
 
-      <p className="mk-controls-hint">TAP attack · HOLD block · ⬆ uppercut · ⬇ sauce blast · ⬅➡ move</p>
+      <p className="mk-controls-hint">TAP attack · ➡ dash strike · HOLD LEFT SIDE block · ⬆ uppercut · ⬇ sauce blast · ⬅ back</p>
     </section>
   );
 }

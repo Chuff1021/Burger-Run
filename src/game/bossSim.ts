@@ -156,12 +156,14 @@ const ROUND_END_TIME = 2.4;
 const FINISH_WINDOW = 6;
 
 // player string: jab → cross → spinning ender (MK-style 1-1-2)
+// startups timed to the CLIPS at their display speeds — damage lands when
+// the fist visually extends (contact-frame sync, the thing that sells hits)
 const P_STRING: AttackStep[] = [
-  { startup: 0.09, active: 0.06, recover: 0.16, damage: 5, reach: 2.1 },
-  { startup: 0.1, active: 0.06, recover: 0.18, damage: 6, reach: 2.2 },
-  { startup: 0.15, active: 0.07, recover: 0.3, damage: 9, reach: 2.4, knockdown: true }
+  { startup: 0.22, active: 0.1, recover: 0.2, damage: 5, reach: 2.4 },
+  { startup: 0.24, active: 0.1, recover: 0.22, damage: 6, reach: 2.4 },
+  { startup: 0.34, active: 0.12, recover: 0.34, damage: 9, reach: 2.6, knockdown: true }
 ];
-const P_UPPERCUT: AttackStep = { startup: 0.2, active: 0.08, recover: 0.5, damage: 13, reach: 1.9, knockdown: true };
+const P_UPPERCUT: AttackStep = { startup: 0.42, active: 0.12, recover: 0.55, damage: 13, reach: 2.4, knockdown: true };
 const SPECIAL_DMG = 10;
 const SPECIAL_COST = 0.5;
 const FATAL_DMG = 32;
@@ -261,12 +263,18 @@ function moveTo(x: number) {
 }
 let dashTarget = 1.6;
 
-/** swipe toward boss = step in; swipe away = backdash */
+/** MCoC scheme: swipe toward = DASH-IN ATTACK (auto-closes to range), swipe away = dash back */
 export function bossMoveLane(direction: -1 | 1) {
   if (!canAct() || boss.pState === 'attack' || boss.pState === 'uppercut') return;
-  const toward = direction === 1; // screen-right = -X = toward boss
-  const limit = boss.bossX + MIN_GAP;
-  moveTo(Math.max(toward ? sim.laneX - WALK_STEP : sim.laneX + WALK_STEP * 1.15, limit));
+  if (direction === 1) {
+    // dash-in attack: lunge all the way to striking range and swing
+    boss.pState = 'attack';
+    boss.pStateT = 0;
+    boss.pString = 0;
+    moveTo(boss.bossX + MIN_GAP);
+    return;
+  }
+  moveTo(sim.laneX + WALK_STEP * 1.6); // dash back
   boss.pState = 'walk';
   boss.pStateT = 0;
 }
@@ -308,8 +316,9 @@ export function bossTap() {
   boss.pState = 'attack';
   boss.pStateT = 0;
   boss.pString = 0;
-  // small advance so strings feel like MK pressure
-  moveTo(Math.max(sim.laneX - 0.5, boss.bossX + MIN_GAP));
+  // auto-close to striking range (MCoC lunge-to-target) — spacing is the
+  // game's job, not the player's
+  moveTo(boss.bossX + MIN_GAP);
 }
 
 export function bossBlockStart() {
@@ -582,7 +591,7 @@ export function stepBoss(rawDt: number): 'fighting' | 'won' | 'lost' {
             boss.pString += 1;
             boss.pStateT = 0;
             boss.pBuffer = 0;
-            moveTo(Math.max(sim.laneX - 0.4, boss.bossX + MIN_GAP));
+            moveTo(boss.bossX + MIN_GAP); // chase his knockback between hits
           } else {
             boss.pState = 'idle';
             boss.pString = 0;

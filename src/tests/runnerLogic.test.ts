@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { boss, bossBlockEnd, bossBlockStart, bossFatalBlow, bossJump, bossSlide, bossTap, fatalReady, finishTap, startBoss, stepBoss } from '../game/bossSim';
+import { boss, bossBlockEnd, bossBlockStart, bossFatalBlow, bossJump, bossSlide, bossTap, fatalReady, finishTap, startBoss, stepBoss , bossMoveLane } from '../game/bossSim';
 import { JUMP_VELOCITY, LANES, LANE_CHANGE_TIME, OBSTACLES, POWERUP_DURATION } from '../game/constants';
 import { bendPoint, jump, moveLane, resetSim, sim, slide, stepSim } from '../game/engine';
 import { resolveSwipeGesture } from '../game/input';
@@ -310,7 +310,7 @@ describe('MK boss fight', () => {
     boss.bCooldown = 99; // freeze AI
     sim.laneX = boss.bossX + 2;
     bossTap();
-    step(0.12);
+    step(0.4); // contact-frame timing: jab lands ~0.22s in
     const afterOne = boss.bossHP;
     expect(afterOne).toBeLessThan(100);
     bossTap(); // buffer the second hit
@@ -335,12 +335,35 @@ describe('MK boss fight', () => {
     bossBlockEnd();
   });
 
+  it('swipe-toward = dash-in attack that auto-closes from any distance', () => {
+    boss.bState = 'idle';
+    boss.bCooldown = 99;
+    sim.laneX = 4.5; // full screen away
+    sim.laneFromX = 4.5;
+    sim.laneT = 1;
+    bossMoveLane(1);
+    expect(boss.pState).toBe('attack'); // swipe IS the attack, no walking
+    step(1.2);
+    expect(boss.bossHP).toBeLessThan(100); // closed the gap and connected
+  });
+
+  it('tap attack auto-closes to striking range', () => {
+    boss.bState = 'idle';
+    boss.bCooldown = 99;
+    sim.laneX = 4.5;
+    sim.laneFromX = 4.5;
+    sim.laneT = 1;
+    bossTap();
+    step(1.2);
+    expect(boss.bossHP).toBeLessThan(100);
+  });
+
   it('uppercut knocks the boss down', () => {
     boss.bState = 'idle';
     boss.bCooldown = 99;
     sim.laneX = boss.bossX + 1.8;
     bossJump();
-    step(0.4);
+    step(0.7); // uppercut winds up ~0.42s before contact
     expect(boss.bState).toBe('knockdown');
     expect(boss.bossHP).toBeLessThan(100);
   });

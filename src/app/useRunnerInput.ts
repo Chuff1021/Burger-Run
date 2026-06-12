@@ -49,13 +49,20 @@ export function useRunnerInput() {
     const onPointerDown = (event: PointerEvent) => {
       if (!event.isPrimary) return;
       const state: GestureState = { x: event.clientX, y: event.clientY, id: event.pointerId, fired: false, holdTimer: 0, blocking: false };
-      // MK block: holding a finger still raises the guard
-      state.holdTimer = window.setTimeout(() => {
-        if (gesture.current === state && !state.fired) {
-          state.blocking = true;
-          useRunnerStore.getState().blockStart();
-        }
-      }, 240);
+      const store = useRunnerStore.getState();
+      // MCoC split screen: in a fight, touching the LEFT third raises the
+      // guard INSTANTLY — block is timing-critical and gets zero latency
+      if (store.status === 'boss' && event.clientX < window.innerWidth * 0.34) {
+        state.blocking = true;
+        store.blockStart();
+      } else {
+        state.holdTimer = window.setTimeout(() => {
+          if (gesture.current === state && !state.fired) {
+            state.blocking = true;
+            useRunnerStore.getState().blockStart();
+          }
+        }, 240);
+      }
       gesture.current = state;
     };
 

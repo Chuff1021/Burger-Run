@@ -34,53 +34,59 @@ const MANAGER_CLIPS = {
 
 /** maps the player fighter state to an animation intent */
 function heroDriver(): RigIntent {
+  const face = THREE.MathUtils.clamp((boss.bossX - sim.laneX) * 0.1 + 0.6, -1, 1);
+  const recoil = boss.pHitFlash;
   switch (boss.pState) {
     case 'attack':
       return boss.pString < 2
-        ? { clip: 'punch', nonce: boss.pString, loop: false, speed: 2.2 }
-        : { clip: 'combo', loop: false, speed: 1.8 };
+        ? { clip: 'punch', nonce: boss.pString, loop: false, speed: 1.35, face, recoil }
+        : { clip: 'combo', loop: false, speed: 1.25, face, recoil };
     case 'uppercut':
-      return { clip: 'uppercut', loop: false, speed: 1.45 };
+      return { clip: 'uppercut', loop: false, speed: 1.15, face, recoil };
     case 'special':
-      return { clip: 'special', loop: false, speed: 1.5 };
+      return { clip: 'special', loop: false, speed: 1.2, face, recoil };
     case 'block':
-      return { clip: 'block', loop: false, speed: 1.3 };
+      return { clip: 'block', loop: false, speed: 1.1, face, recoil };
     case 'duck':
-      return { clip: 'block', loop: false, speed: 1.6 };
+      return { clip: 'block', loop: false, speed: 1.4, face, recoil };
     case 'walk':
-      return { clip: 'walk', speed: 1.6 };
+      return { clip: 'walk', speed: 1.5, face, recoil };
     case 'hitstun':
+      return { clip: 'idle', speed: 0.4, face, recoil: 1 }; // whiplash, never a statue
     case 'knockdown':
     case 'throw':
-      return { clip: 'walk', paused: true };
+      return { clip: 'idle', paused: true, recoil: 0.6 };
     default:
-      return { clip: 'walk', speed: 0.5 }; // bouncing fight stance
+      return { clip: 'idle', speed: 1, face, recoil }; // breathing boxing guard
   }
 }
 
 /** maps the boss AI state to an animation intent */
 function managerDriver(): RigIntent {
+  const face = THREE.MathUtils.clamp((sim.laneX - boss.bossX) * 0.1 - 0.6, -1, 1);
+  const recoil = boss.hitFlash;
   if (boss.phase === 'finisher' || boss.phase === 'victory' || boss.phase === 'finishHim') {
-    return { clip: 'walk', paused: true };
+    return { clip: 'idle', speed: 0.5, recoil: 1 };
   }
   switch (boss.bState) {
     case 'attack': {
       const clip = (['jab1', 'jab2', 'knee'] as const)[boss.bString] ?? 'jab1';
-      return { clip, nonce: boss.bString, loop: false, speed: 1.1 };
+      return { clip, nonce: boss.bString, loop: false, speed: 1.0, face, recoil };
     }
     case 'special':
-      return { clip: 'upper', loop: false, speed: 1.0 };
+      return { clip: 'upper', loop: false, speed: 0.95, face, recoil };
     case 'throw':
-      return { clip: 'kick', loop: false, speed: 1.2 };
+      return { clip: 'kick', loop: false, speed: 1.1, face, recoil };
     case 'walk':
-      return { clip: 'walk', speed: 1.3 };
+      return { clip: 'walk', speed: 1.25, face, recoil };
     case 'hitstun':
+      return { clip: 'idle', speed: 0.4, face, recoil: 1 };
     case 'knockdown':
-      return { clip: 'walk', paused: true };
+      return { clip: 'idle', paused: true, recoil: 0.6 };
     case 'block':
-      return { clip: 'walk', paused: true };
+      return { clip: 'idle', speed: 0.5, face, recoil };
     default:
-      return { clip: 'walk', speed: 0.45 };
+      return { clip: 'idle', speed: 0.9, face, recoil }; // guard stance, breathing
   }
 }
 
