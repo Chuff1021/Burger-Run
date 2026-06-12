@@ -498,6 +498,8 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
   // dir +1 = right turn → exit toward -X (screen right); mirror for left
   const s = dir; // sign shorthand: non-exit side is +X for right turns
   const arrowTex = useMemo(() => arrowSignTexture(dir), [dir]);
+  // flat-on-floor planes mirror their texture (+U = world +X = screen LEFT)
+  const floorArrowTex = useMemo(() => arrowSignTexture(-dir as -1 | 1), [dir]);
   const halo = useMemo(() => glowStreakTexture(), []);
 
   const caution = useMemo(() => {
@@ -515,7 +517,7 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
       warn: new THREE.MeshStandardMaterial({ color: '#ff3b2a', emissive: '#ff2212', emissiveIntensity: 2.2 }),
       arrow: new THREE.MeshBasicMaterial({ map: arrowTex, toneMapped: false }),
       floorArrow: new THREE.MeshBasicMaterial({
-        map: arrowTex,
+        map: floorArrowTex,
         transparent: true,
         opacity: 0.85,
         toneMapped: false,
@@ -532,7 +534,7 @@ function CornerRoomVariant({ dir }: { dir: -1 | 1 }) {
         side: THREE.DoubleSide
       })
     }),
-    [arrowTex, halo, caution]
+    [arrowTex, floorArrowTex, halo, caution]
   );
 
   return (

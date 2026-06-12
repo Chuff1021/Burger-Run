@@ -24,6 +24,7 @@ function CameraRig() {
   const { camera } = useThree();
   const status = useRunnerStore((state) => state.status);
   const yawOffset = useRef(0);
+  const lastLean = useRef(0);
   // debug/QA handle
   useEffect(() => {
     (window as unknown as { __cam: unknown }).__cam = camera;
@@ -68,35 +69,39 @@ function CameraRig() {
       return;
     }
 
-    // ---- corner sweep: consume the engine's yaw kick, then ease back to 0 ----
-    if (sim.cameraYawKick !== 0) {
-      yawOffset.current += sim.cameraYawKick;
-      sim.cameraYawKick = 0;
-    }
-    yawOffset.current *= Math.pow(0.045, dt); // ~0.5s sweep through the corner
-    // pre-lean into an approaching corner so the player sees down the new leg
+    // ---- corner sweep ----
+    // pre-lean into an approaching corner (eased, so the rate ramps gently)
     let lean = 0;
     const corner = sim.corners[0];
-    if (corner && corner.z < 16 && corner.z > 0) {
+    if (corner && corner.z < 20 && corner.z > 0) {
       const turnYaw = -corner.dir * (Math.PI / 2);
-      lean = turnYaw * 0.32 * (1 - corner.z / 16);
+      const k = 1 - corner.z / 20;
+      lean = turnYaw * 0.42 * (k * k * (3 - 2 * k)); // smoothstep
     }
+    if (sim.cameraYawKick !== 0) {
+      // crossing: the world rotated by -kick; fold BOTH the kick and the
+      // current pre-lean into the sweep so total camera yaw stays continuous
+      yawOffset.current += sim.cameraYawKick + lastLean.current;
+      sim.cameraYawKick = 0;
+    }
+    lastLean.current = lean;
+    yawOffset.current *= Math.pow(0.09, dt); // ~0.65s silky sweep
     const yaw = yawOffset.current + lean;
 
     CAMERA_POSITION.set(
-      sim.laneX * 0.5 + shakeX,
-      3.6 + sim.playerY * 0.3 + shakeY,
-      -6.6 - Math.min(1.4, sim.worldSpeed * 0.028)
+      sim.laneX * 0.52 + shakeX,
+      3.05 + sim.playerY * 0.35 + shakeY,
+      -5.7 - Math.min(1.6, sim.worldSpeed * 0.034)
     ).applyAxisAngle(Y_AXIS, yaw);
     camera.position.lerp(CAMERA_POSITION, 1 - Math.pow(0.0003, dt));
-    CAMERA_TARGET.set(sim.laneX * 0.36, 1.5 + sim.playerY * 0.25, 9).applyAxisAngle(Y_AXIS, yaw);
+    CAMERA_TARGET.set(sim.laneX * 0.3, 1.95 + sim.playerY * 0.22, 12).applyAxisAngle(Y_AXIS, yaw);
     camera.lookAt(CAMERA_TARGET);
     // bank into the sweep for that carving-the-corner feel
     camera.rotateZ(THREE.MathUtils.clamp(-yawOffset.current * 0.1, -0.12, 0.12));
     if ('fov' in camera) {
       const cam = camera as THREE.PerspectiveCamera;
       const boostKick = sim.powerups.speedBoost > 0 ? 8 : 0;
-      cam.fov = THREE.MathUtils.lerp(cam.fov, 62 + Math.min(10, sim.worldSpeed * 0.22) + boostKick, Math.min(1, dt * 2.2));
+      cam.fov = THREE.MathUtils.lerp(cam.fov, 57 + Math.min(11, sim.worldSpeed * 0.24) + boostKick, Math.min(1, dt * 2.2));
       cam.updateProjectionMatrix();
     }
   });
