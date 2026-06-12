@@ -6,8 +6,8 @@ import { boss } from '../../game/bossSim';
 import { sim } from '../../game/engine';
 import { glowStreakTexture } from './textures';
 
-useGLTF.preload('/models/boss_fighter.glb');
-useGLTF.preload('/models/hero_fighter.glb');
+useGLTF.preload('/models/manager_boss.glb');
+useGLTF.preload('/models/fry_boy.glb');
 useGLTF.preload('/models/bottle-ketchup.glb');
 
 const FX_SLOTS = 12;
@@ -45,8 +45,8 @@ export function BossArena() {
   const fxRefs = useRef<(THREE.Sprite | null)[]>([]);
   const flameRefs = useRef<(THREE.Mesh | null)[]>([]);
 
-  const heroModel = useFighterModel('/models/hero_fighter.glb', 2.1);
-  const bossModel = useFighterModel('/models/boss_fighter.glb', 3.1);
+  const heroModel = useFighterModel('/models/fry_boy.glb', 2.1);
+  const bossModel = useFighterModel('/models/manager_boss.glb', 3.1);
   const bottle = useGLTF('/models/bottle-ketchup.glb');
   const projModel = useMemo(() => bottle.scene.clone(true), [bottle]);
   const pano = useLoader(THREE.TextureLoader, '/hdri/burger_factory_pano.jpg');

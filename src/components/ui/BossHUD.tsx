@@ -22,7 +22,7 @@ export function BossHUD() {
             <i style={{ width: `${playerHP}%` }} />
           </div>
           <div className="mk-meta">
-            <span className="mk-name">BURGER KID</span>
+            <span className="mk-name">FRY BOY</span>
             <span className="mk-pips">
               {[0, 1].map((i) => (
                 <b key={i} className={i < playerWins ? 'won' : ''} />
